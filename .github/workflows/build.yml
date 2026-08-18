@@ -31,10 +31,12 @@ jobs:
         with:
           node-version: 22
 
-      - name: Cache Node.js modules
+      - name: Cache Node.js & npx modules
         uses: actions/cache@v4
         with:
-          path: ~/.npm
+          path: |
+            ~/.npm
+            C:\Users\runneradmin\AppData\Local\npm-cache
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-
@@ -70,7 +72,7 @@ jobs:
             $argsList += "--icon"
             $argsList += "icon.ico"
           }
-          Write-Host "Running nativefier..."
+          Write-Host "Running nativefier with optimized arguments..."
           npx --yes nativefier @argsList "index.html" "./output"
 
       - name: Verify outputs
