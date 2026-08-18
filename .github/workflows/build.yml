@@ -55,6 +55,7 @@ jobs:
             "--disable-gpu-sandbox",
             "--ignore-certificate-errors",
             "--no-tray",
+            "--disable-seccomp-filter-sandbox",
             "--platform", "windows",
             "--arch", "x64"
           )
