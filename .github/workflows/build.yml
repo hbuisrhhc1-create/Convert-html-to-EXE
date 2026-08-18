@@ -54,8 +54,7 @@ jobs:
             "--background-color", "#ffffff",
             "--disable-gpu-sandbox",
             "--ignore-certificate-errors",
-            "--no-tray",
-            "--disable-seccomp-filter-sandbox",
+            "--tray", "false",
             "--platform", "windows",
             "--arch", "x64"
           )
