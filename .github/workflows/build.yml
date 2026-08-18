@@ -1,4 +1,4 @@
-name: Build Ultimate Custom EXE
+name: Build Ultimate Fast EXE
 
 on:
   workflow_dispatch:
@@ -16,13 +16,8 @@ on:
       app_description:
         description: 'תיאור מפורט לתוכנה'
         required: false
-        default: 'אפליקציית שולחן עבודה מתקדמת המבוססת על טכנולוגיית אינטרנט'
+        default: 'אפליקציית שולחן עבודה מתקדמת'
         type: string
-      enable_flash:
-        description: 'הפעלת תמיכה בתכונות מדיה מתקדמות'
-        required: false
-        default: false
-        type: boolean
 
 jobs:
   build:
@@ -36,27 +31,33 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 22
+        cache: 'npm' # שמירת מטמון אוטומטית לחבילות ה-npm
 
-    - name: Install Graphics Tools and Nativefier
+    - name: Check Cache for Global Tools
+      id: cache-tools
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~\AppData\Roaming\npm
+          ~\AppData\Roaming\npm-node
+        key: ${{ runner.os }}-node-global-tools-${{ hashFiles('**/package.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-global-tools-
+
+    - name: Install Global Tools (Only if not cached)
+      if: steps.cache-tools.outputs.cache-hit != 'true'
       run: |
         npm install -g nativefier
-        # התקנת כלי עיבוד תמונה אוטומטי בענן לצורך המרת תמונות רגילות לאייקון
         npm install -g png-to-ico
 
     - name: Process Icon Automatically
       run: |
-        # אם המשתמש העלה קובץ PNG או JPG רגיל, נמיר אותו לאייקון .ico באופן אוטומטי לחלוטין!
         if (Test-Path "icon.png") {
             npx png-to-ico icon.png > icon.ico
-            Write-Host "Converted icon.png to icon.ico successfully!"
-        } elseif (Test-Path "icon.jpg") {
-            # אם זה JPG, נטפל בהתאם או ניצור עותק
-            Copy-Item "icon.jpg" "icon_temp.jpg"
         }
 
-    - name: Build Ultimate EXE with Full Compatibility & Features
+    - name: Build Ultimate EXE
       run: |
-        # פקודה מקיפה המפעילה את כל הדגלים האפשריים למניעת בעיות קוד, הרצה חלקה ותמיכה מלאה בכל הספריות
         $argsList = @(
             "--name", "${{ github.event.inputs.app_name }}",
             "--app-version", "${{ github.event.inputs.app_version }}",
@@ -64,8 +65,7 @@ jobs:
             "--single-instance",
             "--background-color", "#ffffff",
             "--disable-gpu-sandbox",
-            "--ignore-certificate-errors",
-            "--always-on-top=false"
+            "--ignore-certificate-errors"
         )
 
         if (Test-Path "icon.ico") {
@@ -73,11 +73,10 @@ jobs:
             $argsList += "icon.ico"
         }
 
-        # הרצה מלאה של Nativefier עם קובץ ה-index.html שלך
         nativefier @argsList "index.html" "./output"
 
     - name: Upload Ultimate EXE Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ github.event.inputs.app_name }}-v${{ github.event.inputs.app_version }}-Final-EXE
+        name: ${{ github.event.inputs.app_name }}-v${{ github.event.inputs.app_version }}-EXE
         path: output/**/*.exe
