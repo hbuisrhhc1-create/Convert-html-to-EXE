@@ -1,9 +1,0 @@
-{
-  "name": "convert-html-to-EXE",
-  "version": "1.0.0",
-  "private": true,
-  "devDependencies": {
-    "nativefier": "*",
-    "png-to-ico": "*"
-  }
-}
