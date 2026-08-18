@@ -1,10 +1,10 @@
-name: Build Ultimate Fast EXE
+name: 2. Build EXE Fast
 
 on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: 'שם התוכנה המלא (למשל: MyAdvancedApp)'
+        description: 'שם התוכנה (למשל: MyVault)'
         required: true
         default: 'MyVault'
         type: string
@@ -14,7 +14,7 @@ on:
         default: '1.0.0'
         type: string
       app_description:
-        description: 'תיאור מפורט לתוכנה'
+        description: 'תיאור קצר לתוכנה'
         required: false
         default: 'אפליקציית שולחן עבודה מתקדמת'
         type: string
@@ -31,24 +31,6 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 22
-        cache: 'npm' # שמירת מטמון אוטומטית לחבילות ה-npm
-
-    - name: Check Cache for Global Tools
-      id: cache-tools
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~\AppData\Roaming\npm
-          ~\AppData\Roaming\npm-node
-        key: ${{ runner.os }}-node-global-tools-${{ hashFiles('**/package.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node-global-tools-
-
-    - name: Install Global Tools (Only if not cached)
-      if: steps.cache-tools.outputs.cache-hit != 'true'
-      run: |
-        npm install -g nativefier
-        npm install -g png-to-ico
 
     - name: Process Icon Automatically
       run: |
@@ -56,7 +38,7 @@ jobs:
             npx png-to-ico icon.png > icon.ico
         }
 
-    - name: Build Ultimate EXE
+    - name: Build EXE Instantly
       run: |
         $argsList = @(
             "--name", "${{ github.event.inputs.app_name }}",
@@ -75,7 +57,7 @@ jobs:
 
         nativefier @argsList "index.html" "./output"
 
-    - name: Upload Ultimate EXE Artifact
+    - name: Upload EXE Artifact
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.event.inputs.app_name }}-v${{ github.event.inputs.app_version }}-EXE
