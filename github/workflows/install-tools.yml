@@ -1,0 +1,23 @@
+name: 1. Setup Tools Once
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install Global Tools Permanently
+      run: |
+        npm install -g nativefier
+        npm install -g png-to-ico
+        Write-Host "Tools installed successfully!"
