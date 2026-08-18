@@ -1,0 +1,42 @@
+name: Build Custom EXE
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'שם התוכנה (למשל: MyVault)'
+        required: true
+        default: 'MyVault'
+        type: string
+      app_version:
+        description: 'גרסת התוכנה'
+        required: false
+        default: '1.0.0'
+        type: string
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+
+    - name: Install Nativefier
+      run: npm install -g nativefier
+
+    - name: Build EXE with Custom Inputs
+      run: |
+        # משתמש בשם שהזנת בממשק הגרפי בזמן ההפעלה
+        nativefier --name "${{ github.event.inputs.app_name }}" "index.html" "./output"
+
+    - name: Upload EXE Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ github.event.inputs.app_name }}-exe
+        path: output/**/*.exe
