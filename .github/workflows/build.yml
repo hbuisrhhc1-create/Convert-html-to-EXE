@@ -61,10 +61,10 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path package.json) {
-            Write-Host "package.json found — running npm ci"
-            npm ci --no-audit --no-fund
+            Write-Host "package.json found — running npm install"
+            npm install --no-audit --no-fund
           } else {
-            Write-Host "No package.json — skipping npm ci"
+            Write-Host "No package.json — skipping npm install"
           }
 
       - name: Prepare icon (png -> ico)
