@@ -1,4 +1,4 @@
-name: 2. Build EXE Fast
+name: Build EXE Complete
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ on:
       app_description:
         description: 'תיאור קצר לתוכנה'
         required: false
-        default: 'אפליקציית שולחן עבודה מתקדמת'
+        default: 'אפליקציית שולחן עבודה'
         type: string
 
 jobs:
@@ -32,13 +32,18 @@ jobs:
       with:
         node-version: 22
 
+    - name: Install Tools
+      run: |
+        npm install -g nativefier
+        npm install -g png-to-ico
+
     - name: Process Icon Automatically
       run: |
         if (Test-Path "icon.png") {
             npx png-to-ico icon.png > icon.ico
         }
 
-    - name: Build EXE Instantly
+    - name: Build EXE
       run: |
         $argsList = @(
             "--name", "${{ github.event.inputs.app_name }}",
