@@ -1,4 +1,4 @@
-name: Build EXE Complete
+name: Build EXE
 
 on:
   workflow_dispatch:
@@ -18,52 +18,106 @@ on:
         required: false
         default: 'אפליקציית שולחן עבודה'
         type: string
+      node_version:
+        description: 'Node.js version to use'
+        required: false
+        default: '22'
+        type: string
+      arch:
+        description: 'Target architecture (x64 / ia32 / arm64)'
+        required: false
+        default: 'x64'
+        type: string
+
+concurrency:
+  group: build-exe-${{ github.ref }}-${{ github.event.inputs.app_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 22
+      - name: Set up Node.js ${{ github.event.inputs.node_version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ github.event.inputs.node_version }}
+          cache: "npm"
 
-    - name: Install Tools
-      run: |
-        npm install -g nativefier
-        npm install -g png-to-ico
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-cache-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            npm-cache-${{ runner.os }}-
 
-    - name: Process Icon Automatically
-      run: |
-        if (Test-Path "icon.png") {
-            npx png-to-ico icon.png > icon.ico
-        }
+      - name: Install dependencies (if package.json exists)
+        shell: pwsh
+        run: |
+          if (Test-Path package.json) {
+            Write-Host "package.json found — running npm ci"
+            npm ci --no-audit --no-fund
+          } else {
+            Write-Host "No package.json — skipping npm ci"
+          }
 
-    - name: Build EXE
-      run: |
-        $argsList = @(
+      - name: Prepare icon (png -> ico)
+        shell: pwsh
+        run: |
+          if (Test-Path "icon.png") {
+            Write-Host "Converting icon.png -> icon.ico"
+            npx --yes png-to-ico icon.png > icon.ico
+            Write-Host "icon.ico created"
+          } else {
+            Write-Host "No icon.png found — skipping icon conversion"
+          }
+
+      - name: Build EXE with Nativefier
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "index.html")) {
+            Write-Error "index.html not found in repo root. Aborting."
+            exit 1
+          }
+          $argsList = @(
             "--name", "${{ github.event.inputs.app_name }}",
             "--app-version", "${{ github.event.inputs.app_version }}",
             "--description", "${{ github.event.inputs.app_description }}",
             "--single-instance",
             "--background-color", "#ffffff",
             "--disable-gpu-sandbox",
-            "--ignore-certificate-errors"
-        )
-
-        if (Test-Path "icon.ico") {
+            "--ignore-certificate-errors",
+            "--platform", "windows",
+            "--arch", "${{ github.event.inputs.arch }}"
+          )
+          if (Test-Path "icon.ico") {
             $argsList += "--icon"
             $argsList += "icon.ico"
-        }
+          }
+          Write-Host "Running nativefier via npx..."
+          npx --yes nativefier @argsList "index.html" "./output"
 
-        nativefier @argsList "index.html" "./output"
+      - name: Verify outputs
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path output -Recurse -Filter *.exe -ErrorAction SilentlyContinue
+          if ($exe) {
+            Write-Host "Build produced EXE(s):"
+            $exe | ForEach-Object { Write-Host $_.FullName }
+          } else {
+            Write-Error "No EXE was produced. Check nativefier output above."
+            exit 1
+          }
 
-    - name: Upload EXE Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ github.event.inputs.app_name }}-v${{ github.event.inputs.app_version }}-EXE
-        path: output/**/*.exe
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.app_name }}-v${{ github.event.inputs.app_version }}-EXE
+          path: output/**/*.exe
+          retention-days: 7
