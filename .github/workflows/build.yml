@@ -18,23 +18,11 @@ on:
         required: false
         default: 'אפליקציית שולחן עבודה'
         type: string
-      node_version:
-        description: 'Node.js version to use'
-        required: false
-        default: '22'
-        type: string
       arch:
-        description: 'Target architecture (x64 / ia32 / arm64)'
+        description: 'ארכיטקטורה (x64 / ia32)'
         required: false
         default: 'x64'
         type: string
-
-concurrency:
-  group: build-exe-${{ github.ref }}-${{ github.event.inputs.app_name }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
 
 jobs:
   build:
@@ -43,29 +31,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js ${{ github.event.inputs.node_version }}
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ github.event.inputs.node_version }}
-          cache: "npm"
-
-      - name: Cache npm
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: npm-cache-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            npm-cache-${{ runner.os }}-
-
-      - name: Install dependencies (if package.json exists)
-        shell: pwsh
-        run: |
-          if (Test-Path package.json) {
-            Write-Host "package.json found — running npm install"
-            npm install --no-audit --no-fund
-          } else {
-            Write-Host "No package.json — skipping npm install"
-          }
+          node-version: 22
 
       - name: Prepare icon (png -> ico)
         shell: pwsh
@@ -73,9 +42,6 @@ jobs:
           if (Test-Path "icon.png") {
             Write-Host "Converting icon.png -> icon.ico"
             npx --yes png-to-ico icon.png > icon.ico
-            Write-Host "icon.ico created"
-          } else {
-            Write-Host "No icon.png found — skipping icon conversion"
           }
 
       - name: Build EXE with Nativefier
@@ -100,7 +66,7 @@ jobs:
             $argsList += "--icon"
             $argsList += "icon.ico"
           }
-          Write-Host "Running nativefier via npx..."
+          Write-Host "Running nativefier..."
           npx --yes nativefier @argsList "index.html" "./output"
 
       - name: Verify outputs
@@ -108,10 +74,9 @@ jobs:
         run: |
           $exe = Get-ChildItem -Path output -Recurse -Filter *.exe -ErrorAction SilentlyContinue
           if ($exe) {
-            Write-Host "Build produced EXE(s):"
-            $exe | ForEach-Object { Write-Host $_.FullName }
+            Write-Host "Build produced EXE successfully!"
           } else {
-            Write-Error "No EXE was produced. Check nativefier output above."
+            Write-Error "No EXE was produced."
             exit 1
           }
 
