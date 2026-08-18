@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title id="pageTitle">כספת טקסט וקבצים בלעדית</title>
+  <!-- גיבוי ל-SVG (למחשב ולדפדפנים תומכים) -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  
+  <!-- גיבוי ל-PNG (לטלפונים ניידים ולדפדפנים אחרים) -->
+  <link rel="alternate icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    @keyframes gradientShift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-6px); }
+      40%, 80% { transform: translateX(6px); }
+    }
+
+    .shake {
+      animation: shake 0.4s ease-in-out;
+    }
+
+    :root {
+      --card-bg: rgba(255, 255, 255, 0.85);
+      --input-bg: #f0f7ff;
+      --border-color: #bfdbfe;
+      --border-focus: #2563eb;
+      --accent-blue: #2563eb;
+      --text-main: #1e3a8a;
+      --text-muted: #64748b;
+    }
+
+  .vault-logo-container {
+      text-align: center;
+      margin-bottom: -5px;
+    }
+
+    .vault-logo {
+      width: 110px;          /* גודל מושלם ובולט לעין */
+      height: auto;          /* שומר על פרופורציות מקוריות */
+      display: inline-block;
+      filter: drop-shadow(0 10px 15px rgba(37, 99, 235, 0.2)); /* אפקט צל יוקרתי תואם לעיצוב */
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Heebo', sans-serif;
+    }
+
+    body {
+      background: linear-gradient(-45deg, #dbeafe, #eff6ff, #bfdbfe, #93c5fd);
+      background-size: 400% 400%;
+      animation: gradientShift 15s ease infinite;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      color: var(--text-main);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 650px;
+      background-color: var(--card-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      border-radius: 32px;
+      padding: 36px 30px;
+      box-shadow: 0 20px 40px rgba(37, 99, 235, 0.1), 0 1px 3px rgba(0, 0, 0, 0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+    }
+
+    .lang-badge {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(37,99,235,0.05);
+      transition: all 0.25s ease;
+    }
+
+    .lang-badge:hover {
+      border-color: var(--border-focus);
+      background: #f8fafc;
+    }
+
+    .main-title {
+      text-align: center;
+      font-size: 2.3rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #1e3a8a;
+      margin-bottom: 4px;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .password-wrapper {
+      position: relative;
+      width: 100%;
+    }
+
+    .text-input, .select-input {
+      width: 100%;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 16px 20px;
+      color: var(--text-main);
+      font-size: 1rem;
+      outline: none;
+      transition: all 0.3s ease;
+    }
+
+    .password-wrapper .text-input {
+      padding-left: 110px;
+    }
+
+    .text-input:focus, .select-input:focus {
+      border-color: var(--border-focus);
+      background-color: #ffffff;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+    }
+
+    .text-input::placeholder {
+      color: #94a3b8;
+    }
+
+    .password-actions {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      gap: 6px;
+    }
+
+    .pwd-icon-btn {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      color: #3b82f6;
+      cursor: pointer;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    .pwd-icon-btn:hover {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-color: var(--border-focus);
+      transform: scale(1.05);
+    }
+
+    .strength-meter-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: -4px;
+    }
+
+    .strength-bar-bg {
+      width: 100%;
+      height: 6px;
+      background-color: #e2e8f0;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .strength-bar-fill {
+      height: 100%;
+      width: 0%;
+      transition: width 0.4s ease, background-color 0.4s ease;
+      border-radius: 3px;
+    }
+
+    .strength-text {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      text-align: left;
+    }
+
+    .rounds-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background-color: var(--input-bg);
+      padding: 12px 18px;
+      border-radius: 14px;
+      border: 1px solid var(--border-color);
+    }
+
+    .rounds-label {
+      font-size: 0.92rem;
+      color: var(--text-main);
+    }
+
+    .select-input {
+      padding: 8px 14px;
+      width: auto;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      background-color: #ffffff;
+    }
+
+    .textarea-input {
+      width: 100%;
+      height: 150px;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 16px 20px;
+      color: var(--text-main);
+      font-size: 1rem;
+      resize: vertical;
+      outline: none;
+      transition: all 0.3s ease;
+    }
+
+    .textarea-input:focus {
+      border-color: var(--border-focus);
+      background-color: #ffffff;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+    }
+
+    .textarea-input::placeholder {
+      color: #94a3b8;
+    }
+
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      padding: 0 4px;
+      margin-top: -8px;
+    }
+
+    .buttons-row {
+      display: flex;
+      gap: 14px;
+    }
+
+    .btn-secondary {
+      flex: 1;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 14px 20px;
+      border-radius: 16px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 2px 5px rgba(37,99,235,0.03);
+      transition: all 0.25s ease;
+    }
+
+    .btn-secondary:hover {
+      background: #eff6ff;
+      border-color: var(--border-focus);
+      color: var(--border-focus);
+      transform: translateY(-2px);
+    }
+
+    .btn-primary {
+      width: 100%;
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      border: none;
+      color: #ffffff;
+      padding: 18px;
+      border-radius: 18px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 25px rgba(37, 99, 235, 0.45);
+    }
+
+    .decrypt-section-box {
+      background: rgba(239, 246, 255, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .decrypt-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .drop-zone, .file-upload-box {
+      border: 2px dashed var(--border-color);
+      border-radius: 16px;
+      padding: 18px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      cursor: pointer;
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.3s ease;
+    }
+
+    .drop-zone:hover, .file-upload-box:hover {
+      border-color: var(--border-focus);
+      background: #eff6ff;
+      color: var(--border-focus);
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal-card {
+      background: #ffffff;
+      border-radius: 24px;
+      padding: 30px;
+      width: 90%;
+      max-width: 420px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      transform: scale(0.9);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal-overlay.active .modal-card {
+      transform: scale(1);
+    }
+
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .modal-desc {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .modal-error-msg {
+      color: #ef4444;
+      font-size: 0.85rem;
+      min-height: 18px;
+      font-weight: 500;
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .status-msg {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      font-weight: 500;
+      min-height: 20px;
+    }
+
+    .security-note {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .footer-credit {
+      text-align: center;
+      color: var(--text-main);
+      font-size: 0.92rem;
+      font-weight: 500;
+      margin-top: 4px;
+    }
+
+    .footer-credit span {
+      color: #3b82f6;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="top-bar">
+      <div class="lang-badge" onclick="toggleLanguage()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+        <span id="langText">עברית</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </div>
+    </div>
+
+    <h1 class="main-title" id="mainTitle">כספת טקסט וקבצים בלעדית</h1>
+
+    <div class="input-group">
+      <div class="password-wrapper">
+        <input type="password" class="text-input" id="passwordInput" placeholder="הכנס סיסמה להצפנה (לפחות 8 תווים)" oninput="checkPasswordStrength(this.value)">
+        <div class="password-actions">
+          <button type="button" class="pwd-icon-btn" id="genPwdBtn" onclick="generatePassword()" title="צור סיסמה חזקה">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><circle cx="8" cy="8" r="1.5"></circle><circle cx="16" cy="16" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="16" cy="8" r="1.5"></circle><circle cx="8" cy="16" r="1.5"></circle></svg>
+          </button>
+          <button type="button" class="pwd-icon-btn" id="toggleEyeBtn" onclick="togglePasswordVisibility()" title="הצג/הסתיר סיסמה">
+            <svg id="eyeIconSvg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="strength-meter-container">
+        <div class="strength-bar-bg">
+          <div class="strength-bar-fill" id="strengthBarFill"></div>
+        </div>
+        <div class="strength-text" id="strengthText">חוזק סיסמה: ממתין להקלדה...</div>
+      </div>
+      
+      <div class="rounds-row">
+        <label for="roundsSelect" class="rounds-label" id="roundsLabelText">רמת חוזק / סבבי הצפנה:</label>
+        <select id="roundsSelect" class="select-input" onchange="savePreferences()">
+          <option value="10000" id="optLow">רגילה (10,000 סבבים)</option>
+          <option value="50000" selected id="optStd">מומלצת (50,000 סבבים)</option>
+          <option value="100000" id="optHigh">גבוהה (100,000 סבבים)</option>
+        </select>
+      </div>
+
+      <div class="file-upload-box" id="fileUploadBox" onclick="document.getElementById('encryptFileInput').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleFileDrop(event)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+        <span id="selectedFileName">לחץ כאן או גרור קובץ להצפנה (אופציונלי)</span>
+        <input type="file" id="encryptFileInput" style="display: none;" onchange="updateFileSelection(this.files[0])">
+      </div>
+
+      <textarea class="textarea-input" id="textInput" placeholder=". . . הכתוב כאן יינעל ויוצפן (אם לא נבחר קובץ)" oninput="updateTextStats()"></textarea>
+      <div class="stats-row" id="textStatsRow">
+        <span id="charCount">תווים: 0</span>
+        <span id="wordCount">מילים: 0</span>
+      </div>
+    </div>
+
+    <div class="buttons-row">
+      <button class="btn-secondary" id="copyBtnText" onclick="copyText()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        העתק טקסט
+      </button>
+      <button class="btn-secondary" id="clearBtnText" onclick="clearAll()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        ניקוי הכל
+      </button>
+    </div>
+
+    <button class="btn-primary" id="encryptBtnText" onclick="encryptAndDownload()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+      נעל והורד קובץ (.mystic)
+    </button>
+
+    <div class="decrypt-section-box">
+      <div class="decrypt-title" id="decryptSectionTitleText">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        אזור פענוח קבצים מאובטח:
+      </div>
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        <span id="dropZoneText">גרור לכאן קובץ .mystic או לחץ לבחירה לשחרור ופענוח</span>
+        <input type="file" id="fileInput" accept=".mystic" style="display: none;" onchange="prepareFileForDecrypt(this.files[0])">
+      </div>
+    </div>
+
+    <div class="status-msg" id="statusMsg"></div>
+
+    <div class="security-note" id="securityNoteText">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+      <b>אבטחה מלאה:</b> הצפנת AES-GCM מתקדמת מקומית בדפדפן (Zero-Knowledge).
+    </div>
+
+    <div class="footer-credit" id="footerCreditText">
+      <span>✦</span> פותח ונבנה על ידי <b>ינון דרייב</b>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="decryptModal">
+    <div class="modal-card" id="modalCard">
+      <div class="modal-title" id="modalTitleText">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        נדרשת סיסמת פענוח
+      </div>
+      <div class="modal-desc" id="modalDescText">
+        הקובץ הנבחר מוצפן. אנא הכנס את הסיסמה שאיתה הוא ננעל כדי לשחרר ולפענח אותו:
+      </div>
+      <input type="password" class="text-input" id="modalPasswordInput" placeholder="הכנס סיסמה כאן..." onkeydown="if(event.key==='Enter') confirmDecrypt()">
+      <div class="modal-error-msg" id="modalErrorMsg"></div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" id="modalCancelBtn" onclick="closeDecryptModal()">ביטול</button>
+        <button class="btn-primary" id="modalConfirmBtn" onclick="confirmDecrypt()">פענח קובץ</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let rawFileData = null;
+    let rawFileName = "";
+    let currentLang = localStorage.getItem('mystic_lang') || 'he';
+    let pendingFileToDecrypt = null;
+
+    const translations = {
+      he: {
+        pageTitle: "כספת טקסט וקבצים בלעדית",
+        mainTitle: "כספת טקסט וקבצים בלעדית",
+        langText: "עברית",
+        passwordPlaceholder: "הכנס סיסמה להצפנה (לפחות 8 תווים)",
+        strengthWait: "חוזק סיסמה: ממתין להקלדה...",
+        strengthVeryWeak: "חלשה מאוד",
+        strengthWeak: "חלשה",
+        strengthMedium: "טובה / בינונית",
+        strengthStrong: "חזקה מאוד!",
+        roundsLabel: "רמת חוזק / סבבי הצפנה:",
+        optLow: "רגילה (10,000 סבבים)",
+        optStd: "מומלצת (50,000 סבבים)",
+        optHigh: "גבוהה (100,000 סבבים)",
+        selectedFileDefault: "לחץ כאן או גרור קובץ להצפנה (אופציונלי)",
+        textPlaceholder: ". . . הכתוב כאן יינעל ויוצפן (אם לא נבחר קובץ)",
+        copyTextBtn: "העתק טקסט",
+        clearBtn: "ניקוי הכל",
+        encryptBtn: "נעל והורד קובץ (.mystic)",
+        decryptSectionTitle: "אזור פענוח קבצים מאובטח:",
+        dropZoneText: "גרור לכאן קובץ .mystic או לחץ לבחירה לשחרור ופענוח",
+        securityNote: "<b>אבטחה מלאה:</b> הצפנת AES-GCM מתקדמת מקומית בדפדפן (Zero-Knowledge).",
+        footerCredit: '<span>✦</span> פותח ונבנה על ידי <b>ינון דרייב</b>',
+        modalTitle: "נדרשת סיסמת פענוח",
+        modalDesc: "הקובץ הנבחר מוצפן. אנא הכנס את הסיסמה שאיתה הוא ננעל כדי לשחרר ולפענח אותו:",
+        modalPasswordPlaceholder: "הכנס סיסמה כאן...",
+        modalCancel: "ביטול",
+        modalConfirm: "פענח קובץ",
+        statusNoText: "אין טקסט להעתקה",
+        statusTextCopied: "הטקסט הועתק ללוח!",
+        statusEncrypted: "הקובץ הוצפן קריפטוגרפית וירד בהצלחה!",
+        statusDecryptedFile: (name) => `הקובץ "${name}" פוענח וירד בהצלחה!`,
+        statusDecryptedText: "הטקסט פוענח ושוחזר בהצלחה!",
+        statusWrongPwd: "שגיאה: סיסמת הפענוח שגויה או קובץ פגום!",
+        statusLangChanged: "השפה שונתה בהצלחה",
+        statusRandomPwd: "נוצרה סיסמה אקראית חזקה בהצלחה!",
+        statusCleared: "השדות רוקנו בהצלחה",
+        statusFileReady: "הקובץ מוכן להצפנה",
+        selectedFilePrefix: "נבחר קובץ: ",
+        charCount: (n) => `תווים: ${n}`,
+        wordCount: (n) => `מילים: ${n}`
+      },
+      en: {
+        pageTitle: "Exclusive Text & File Vault",
+        mainTitle: "Exclusive Text & File Vault",
+        langText: "English",
+        passwordPlaceholder: "Enter encryption password (at least 8 chars)",
+        strengthWait: "Password strength: waiting for input...",
+        strengthVeryWeak: "Very Weak",
+        strengthWeak: "Weak",
+        strengthMedium: "Good / Medium",
+        strengthStrong: "Very Strong!",
+        roundsLabel: "Strength / Encryption Rounds:",
+        optLow: "Normal (10,000 rounds)",
+        optStd: "Recommended (50,000 rounds)",
+        optHigh: "High (100,000 rounds)",
+        selectedFileDefault: "Click here or drop file to encrypt (optional)",
+        textPlaceholder: ". . . Text entered here will be locked and encrypted (if no file is selected)",
+        copyTextBtn: "Copy Text",
+        clearBtn: "Clear All",
+        encryptBtn: "Lock and Download File (.mystic)",
+        decryptSectionTitle: "Secure File Decryption Area:",
+        dropZoneText: "Drop .mystic file here or click to upload for release and decryption",
+        securityNote: "<b>Full Security:</b> Advanced browser-based AES-GCM encryption (Zero-Knowledge).",
+        footerCredit: '<span>✦</span> Developed and built by <b>Inon Drive</b>',
+        modalTitle: "Decryption Password Required",
+        modalDesc: "The selected file is encrypted. Please enter the password used to lock it in order to release and decrypt:",
+        modalPasswordPlaceholder: "Enter password here...",
+        modalCancel: "Cancel",
+        modalConfirm: "Decrypt File",
+        statusNoText: "No text to copy",
+        statusTextCopied: "Text copied to clipboard!",
+        statusEncrypted: "File cryptographically encrypted and downloaded successfully!",
+        statusDecryptedFile: (name) => `File "${name}" decrypted and downloaded successfully!`,
+        statusDecryptedText: "Text decrypted and restored successfully!",
+        statusWrongPwd: "Error: Incorrect decryption password or corrupted file!",
+        statusLangChanged: "Language changed successfully",
+        statusRandomPwd: "Strong random password generated successfully!",
+        statusCleared: "Fields cleared successfully",
+        statusFileReady: "File ready for encryption",
+        selectedFilePrefix: "Selected file: ",
+        charCount: (n) => `Chars: ${n}`,
+        wordCount: (n) => `Words: ${n}`
+      }
+    };
+
+    // Initialize UI settings from LocalStorage
+    window.addEventListener('DOMContentLoaded', () => {
+      if (currentLang === 'en') {
+        applyLanguageSettings();
+      }
+    
+      const savedRounds = localStorage.getItem('mystic_rounds');
+      if (savedRounds) {
+        document.getElementById('roundsSelect').value = savedRounds;
+      }
+    });
+
+    // רישום Service Worker להתקנת אפליקציה וניקוי מטמון אוטומטי
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => {
+        console.log('Service Worker registration failed: ', err);
+      });
+    });
+  }
+
+    function savePreferences() {
+      const rounds = document.getElementById('roundsSelect').value;
+      localStorage.setItem('mystic_rounds', rounds);
+    }
+
+    function updateStatus(text) {
+      document.getElementById('statusMsg').innerText = text;
+    }
+
+    function updateTextStats() {
+      const text = document.getElementById('textInput').value;
+      const t = translations[currentLang];
+      const chars = text.length;
+      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+      document.getElementById('charCount').innerText = t.charCount(chars);
+      document.getElementById('wordCount').innerText = t.wordCount(words);
+    }
+
+    function togglePasswordVisibility() {
+      const pwdInput = document.getElementById('passwordInput');
+      const eyeIconSvg = document.getElementById('eyeIconSvg');
+      if (pwdInput.type === 'password') {
+        pwdInput.type = 'text';
+        eyeIconSvg.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+      } else {
+        pwdInput.type = 'password';
+        eyeIconSvg.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+      }
+    }
+
+    function generatePassword() {
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+";
+      let password = "";
+      for (let i = 0; i < 14; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      const pwdInput = document.getElementById('passwordInput');
+      pwdInput.value = password;
+      pwdInput.type = 'text';
+      document.getElementById('eyeIconSvg').innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+      checkPasswordStrength(password);
+      updateStatus(translations[currentLang].statusRandomPwd);
+    }
+
+    function checkPasswordStrength(password) {
+      const fillBar = document.getElementById('strengthBarFill');
+      const strengthText = document.getElementById('strengthText');
+      const t = translations[currentLang];
+      
+      if (!password) {
+        fillBar.style.width = '0%';
+        fillBar.style.backgroundColor = 'transparent';
+        strengthText.innerText = t.strengthWait;
+        return;
+      }
+
+      let score = 0;
+      if (password.length >= 8) score += 1;
+      if (password.length >= 12) score += 1;
+      if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
+      if (/[0-9]/.test(password)) score += 1;
+      if (/[^A-Za-z0-9]/.test(password)) score += 1;
+
+      let width = '20%';
+      let color = '#ef4444';
+      let text = t.strengthVeryWeak;
+
+      if (score === 2) {
+        width = '40%';
+        color = '#f97316';
+        text = t.strengthWeak;
+      } else if (score === 3 || score === 4) {
+        width = '75%';
+        color = '#3b82f6';
+        text = t.strengthMedium;
+      } else if (score >= 5) {
+        width = '100%';
+        color = '#2563eb';
+        text = t.strengthStrong;
+      }
+
+      fillBar.style.width = width;
+      fillBar.style.backgroundColor = color;
+      strengthText.innerText = (currentLang === 'he' ? `חוזק סיסמה: ${text}` : `Password strength: ${text}`);
+    }
+
+    function toggleLanguage() {
+      currentLang = currentLang === 'he' ? 'en' : 'he';
+      localStorage.setItem('mystic_lang', currentLang);
+      applyLanguageSettings();
+      updateStatus(translations[currentLang].statusLangChanged);
+    }
+
+    function applyLanguageSettings() {
+      const t = translations[currentLang];
+      document.documentElement.dir = currentLang === 'he' ? 'rtl' : 'ltr';
+      
+      const setElementText = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = text;
+      };
+
+      const setElementHTML = (id, html) => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = html;
+      };
+
+      setElementText('pageTitle', t.pageTitle);
+      setElementText('mainTitle', t.mainTitle);
+      setElementText('langText', t.langText);
+      
+      const pwdInput = document.getElementById('passwordInput');
+      if (pwdInput) pwdInput.placeholder = t.passwordPlaceholder;
+
+      setElementText('roundsLabelText', t.roundsLabel);
+      setElementText('optLow', t.optLow);
+      setElementText('optStd', t.optStd);
+      setElementText('optHigh', t.optHigh);
+      
+      if (!rawFileName) {
+        setElementText('selectedFileName', t.selectedFileDefault);
+      }
+      
+      const txtInput = document.getElementById('textInput');
+      if (txtInput) txtInput.placeholder = t.textPlaceholder;
+
+      setElementHTML('copyTextBtn', `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>${t.copyTextBtn}`);
+      setElementHTML('clearBtnText', `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>${t.clearBtn}`);
+      setElementHTML('encryptBtnText', `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>${t.encryptBtn}`);
+      setElementHTML('decryptSectionTitleText', `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>${t.decryptSectionTitle}`);
+      
+      setElementText('dropZoneText', t.dropZoneText);
+      setElementHTML('securityNoteText', `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>${t.securityNote}`);
+      setElementHTML('footerCreditText', t.footerCredit);
+
+      setElementHTML('modalTitleText', `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>${t.modalTitle}`);
+      setElementText('modalDescText', t.modalDesc);
+      
+      const modalPwd = document.getElementById('modalPasswordInput');
+      if (modalPwd) modalPwd.placeholder = t.modalPasswordPlaceholder;
+
+      setElementText('modalCancelBtn', t.modalCancel);
+      setElementText('modalConfirmBtn', t.modalConfirm);
+
+      if (pwdInput) checkPasswordStrength(pwdInput.value);
+      updateTextStats();
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      document.getElementById('fileUploadBox').style.borderColor = '#2563eb';
+    }
+
+    function handleDragLeave(e) {
+      e.preventDefault();
+      document.getElementById('fileUploadBox').style.borderColor = '#bfdbfe';
+    }
+
+    function handleFileDrop(e) {
+      e.preventDefault();
+      document.getElementById('fileUploadBox').style.borderColor = '#bfdbfe';
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        updateFileSelection(e.dataTransfer.files[0]);
+      }
+    }
+
+    function updateFileSelection(file) {
+      const t = translations[currentLang];
+      if (file) {
+        rawFileName = file.name;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          rawFileData = e.target.result;
+          document.getElementById('selectedFileName').innerText = `${t.selectedFilePrefix}${file.name}`;
+          updateStatus(t.statusFileReady);
+        };
+        reader.readAsArrayBuffer(file);
+      }
+    }
+
+    function clearAll() {
+      const t = translations[currentLang];
+      document.getElementById('passwordInput').value = '';
+      document.getElementById('passwordInput').type = 'password';
+      document.getElementById('modalPasswordInput').value = '';
+      document.getElementById('modalErrorMsg').innerText = '';
+      document.getElementById('eyeIconSvg').innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+      document.getElementById('textInput').value = '';
+      document.getElementById('encryptFileInput').value = '';
+      document.getElementById('selectedFileName').innerText = t.selectedFileDefault;
+      rawFileData = null;
+      rawFileName = "";
+      checkPasswordStrength('');
+      updateTextStats();
+      updateStatus(t.statusCleared);
+    }
+
+    function copyText() {
+      const t = translations[currentLang];
+      const text = document.getElementById('textInput').value;
+      if (!text) return updateStatus(t.statusNoText);
+      navigator.clipboard.writeText(text);
+      updateStatus(t.statusTextCopied);
+    }
+
+    // --- Cryptographic Helper Functions (Web Crypto API: PBKDF2 + AES-GCM) ---
+    async function deriveKey(password, salt, iterations) {
+      const enc = new TextEncoder();
+      const cryptoSubtle = window.crypto.subtle || window.subtle;
+      
+      const keyMaterial = await cryptoSubtle.importKey(
+        "raw",
+        enc.encode(password),
+        { name: "PBKDF2" },
+        false,
+        ["deriveKey"]
+      );
+      return cryptoSubtle.deriveKey(
+        {
+          name: "PBKDF2",
+          salt: salt,
+          iterations: parseInt(iterations),
+          hash: "SHA-256"
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+      );
+    }
+
+    async function encryptData(secretData, password, iterations) {
+      const salt = window.crypto.getRandomValues(new Uint8Array(16));
+      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+      const key = await deriveKey(password, salt, iterations);
+      const cryptoSubtle = window.crypto.subtle || window.subtle;
+      
+      const encryptedContent = await cryptoSubtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        key,
+        secretData
+      );
+
+      return {
+        salt: Array.from(salt),
+        iv: Array.from(iv),
+        data: Array.from(new Uint8Array(encryptedContent))
+      };
+    }
+
+    async function decryptData(encryptedObj, password, iterations) {
+      const salt = new Uint8Array(encryptedObj.salt);
+      const iv = new Uint8Array(encryptedObj.iv);
+      const data = new Uint8Array(encryptedObj.data);
+      const cryptoSubtle = window.crypto.subtle || window.subtle;
+      
+      const key = await deriveKey(password, salt, iterations);
+      
+      const decryptedContent = await cryptoSubtle.decrypt(
+        { name: "AES-GCM", iv: iv },
+        key,
+        data
+      );
+
+      return decryptedContent;
+    }
+
+    async function encryptAndDownload() {
+      const t = translations[currentLang];
+      const password = document.getElementById('passwordInput').value;
+      const text = document.getElementById('textInput').value;
+      const roundsElement = document.getElementById('roundsSelect');
+      const rounds = roundsElement ? roundsElement.value : '50000';
+
+      if (!password || password.length < 8) {
+        alert(currentLang === 'he' ? 'אנא הכנס סיסמה בת 8 תווים לפחות' : 'Please enter a password of at least 8 characters');
+        return;
+      }
+
+      if (!rawFileData && !text) {
+        alert(currentLang === 'he' ? 'אנא הכנס טקסט או בחר קובץ להצפנה' : 'Please enter text or select a file to encrypt');
+        return;
+      }
+
+      try {
+        let contentBytes;
+        let type = 'text';
+        let name = 'vault';
+
+        if (rawFileData) {
+          contentBytes = rawFileData;
+          type = 'file';
+          name = rawFileName;
+        } else {
+          contentBytes = new TextEncoder().encode(text);
+          type = 'text';
+        }
+
+        const encryptedPayload = await encryptData(contentBytes, password, rounds);
+
+        const fileContainer = {
+          version: 2,
+          rounds: rounds,
+          type: type,
+          fileName: name,
+          payload: encryptedPayload
+        };
+
+        const blob = new Blob([JSON.stringify(fileContainer)], { type: 'application/octet-stream' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = name + (type === 'file' ? '.mystic' : '.txt.mystic');
+        link.click();
+
+        updateStatus(t.statusEncrypted);
+
+        // ==========================================
+        // ניקוי אוטומטי של כל השדות מיד לאחר ההצפנה וההורדה:
+        // ==========================================
+        clearAll();
+
+      } catch (err) {
+        console.error("Encryption Details Error:", err);
+        alert(currentLang === 'he' ? 'שגיאה בתהליך ההצפנה' : 'Encryption error');
+      }
+    }
+    function prepareFileForDecrypt(file) {
+      if (!file) return;
+      pendingFileToDecrypt = file;
+      document.getElementById('modalPasswordInput').value = '';
+      document.getElementById('modalErrorMsg').innerText = '';
+      document.getElementById('decryptModal').classList.add('active');
+      document.getElementById('modalPasswordInput').focus();
+    }
+
+    function closeDecryptModal() {
+      document.getElementById('decryptModal').classList.remove('active');
+      pendingFileToDecrypt = null;
+    }
+
+    async function confirmDecrypt() {
+      const t = translations[currentLang];
+      const file = pendingFileToDecrypt;
+      const decryptPassword = document.getElementById('modalPasswordInput').value;
+      const modalError = document.getElementById('modalErrorMsg');
+      const modalCard = document.getElementById('modalCard');
+      
+      if (!file) return;
+
+      if (!decryptPassword) {
+        modalError.innerText = currentLang === 'he' ? 'אנא הכנס סיסמה' : 'Please enter password';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          const iterations = parsed.rounds || 50000;
+
+          const decryptedBytes = await decryptData(parsed.payload, decryptPassword, iterations);
+
+          closeDecryptModal();
+
+          if (parsed.type === 'file') {
+            const blob = new Blob([decryptedBytes]);
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = parsed.fileName || 'decrypted_file';
+            link.click();
+            updateStatus(t.statusDecryptedFile(parsed.fileName || 'file'));
+          } else {
+            const textContent = new TextDecoder().decode(decryptedBytes);
+            document.getElementById('textInput').value = textContent;
+            if (parsed.rounds) {
+              document.getElementById('roundsSelect').value = parsed.rounds;
+            }
+            updateTextStats();
+            updateStatus(t.statusDecryptedText);
+          }
+        } catch (err) {
+          modalError.innerText = t.statusWrongPwd;
+          modalCard.classList.add('shake');
+          setTimeout(() => modalCard.classList.remove('shake'), 400);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Drag and drop setup for decryption zone
+    const dropZone = document.getElementById('dropZone');
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = '#2563eb';
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.style.borderColor = '#bfdbfe';
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = '#bfdbfe';
+      if (e.dataTransfer.files.length > 0) {
+        prepareFileForDecrypt(e.dataTransfer.files[0]);
+      }
+    });
+  </script>
+</body>
+</html>
