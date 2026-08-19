@@ -19,7 +19,7 @@ on:
         default: 'אפליקציית שולחן עבודה'
         type: string
       icon_choice:
-        description: 'שם קובץ האייקון המבוקש מתוך המאגר (למשל: icon1.png או logo.png)'
+        description: 'שם קובץ האייקון המבוקש (למשל: icon.png)'
         required: false
         default: 'icon.png'
         type: string
@@ -46,43 +46,46 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-
 
-      - name: Pre-flight & Selected Icon Processing
+      - name: Pre-flight & Icon Processing (Hebrew Logs)
         shell: pwsh
         run: |
-          Write-Host "=== Starting Smart Workspace Inspection ==="
-          if (Test-Path "output") { Remove-Item -Recurse -Force "output" }
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host "=== מתחיל בדיקות מקדימות וסידור סביבת העבודה ==="
+          
+          if (Test-Path "output") { 
+            Write-Host "מנקה תיקיית פלט ישנה..."
+            Remove-Item -Recurse -Force "output" 
+          }
 
           if (-not (Test-Path "index.html")) {
-            Write-Error "CRITICAL: index.html is missing from the root directory!"
+            Write-Error "שגיאה קריטית: קובץ ה-index.html לא נמצא בתיקיית השורש של הפרויקט!"
             exit 1
           }
+          Write-Host "אישור: קובץ index.html נמצא ותקין."
 
           $selectedIcon = "${{ github.event.inputs.icon_choice }}"
           
           if (-not [string]::IsNullOrWhiteSpace($selectedIcon) -and (Test-Path $selectedIcon)) {
-            Write-Host "Using user-selected icon file: $selectedIcon"
+            Write-Host "מצאתי את קובץ האייקון שבחרת: $selectedIcon. מתחיל המרה..."
             $ext = [System.IO.Path]::GetExtension($selectedIcon)
             
             if ($ext -eq ".png") {
               npx --yes png-to-ico $selectedIcon > icon.ico
-              Write-Host "OK: Converted $selectedIcon to icon.ico successfully."
+              Write-Host "אישור: קובץ ה-PNG הומר בהצלחה לפורמט ICO."
             } elseif ($ext -eq ".ico") {
               Copy-Item $selectedIcon "icon.ico"
-              Write-Host "OK: Using selected .ico file directly."
+              Write-Host "אישור: קובץ ה-ICO הועתק בהצלחה."
             }
           } else {
-            Write-Warning "Selected icon '$selectedIcon' was not found in repository. Falling back to auto-detection..."
-            $fallbackIcon = Get-ChildItem -Path "." -Filter "*.png" | Select-Object -First 1
-            if ($fallbackIcon) {
-              npx --yes png-to-ico $($fallbackIcon.Name) > icon.ico
-              Write-Host "OK: Fallback icon auto-applied from $($fallbackIcon.Name)."
-            }
+            Write-Warning "אזהרה: קובץ האייקון '$selectedIcon' לא נמצא במאגר. ממשיך בבנייה ללא אייקון מותאם אישית (יוצר ללא עצירה)."
           }
-          Write-Host "=== Pre-flight completed successfully ==="
+          
+          Write-Host "=== הבדיקות המקדימות הסתיימו בהצלחה ==="
 
-      - name: Multi-Method EXE Compilation Pipeline
+      - name: Multi-Method EXE Compilation Pipeline (Hebrew Logs)
         shell: pwsh
         run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $appName = "${{ github.event.inputs.app_name }}"
           $appVersion = "${{ github.event.inputs.app_version }}"
           $appDesc = "${{ github.event.inputs.app_description }}"
@@ -91,9 +94,9 @@ jobs:
           $success = $false
 
           # ==========================================
-          # שיטה 1: אריזה סטנדרטית עם דגלי אופטימיזציה
+          # שיטה 1: אריזה סטנדרטית
           # ==========================================
-          Write-Host "`n>>> [Method 1/3] Trying standard nativefier packaging..."
+          Write-Host "`n>>> [שיטה 1 מתוך 3] מנסה ליצור את התוכנה באריזה סטנדרטית..."
           if (Test-Path "output") { Remove-Item -Recurse -Force "output" }
           
           $args1 = @(
@@ -112,19 +115,20 @@ jobs:
 
           try {
             npx --yes nativefier @args1 "index.html" "./output"
-            if ((Get-ChildItem -Path "output" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue)) {
-              Write-Host "Method 1 produced an EXE successfully."
+            $exe = Get-ChildItem -Path "output" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue
+            if ($exe) {
+              Write-Host "הצלחה! שיטה 1 יצרה את קובץ ה-EXE כמו שצריך."
               $success = $true
             }
           } catch {
-            Write-Warning "Method 1 failed."
+            Write-Warning "שיטה 1 נכשלה, עובר לשיטה הבאה..."
           }
 
           # ==========================================
-          # שיטה 2: אריזה עם נטרול Sandbox ומניעת קריסות (Fallback A)
+          # שיטה 2: נטרול Sandbox
           # ==========================================
           if (-not $success) {
-            Write-Host "`n>>> [Method 2/3] Trying robust fallback with disabled security sandboxes..."
+            Write-Host "`n>>> [שיטה 2 מתוך 3] מנסה אריזה עם נטרול מנגנוני אבטחה (Sandbox)..."
             if (Test-Path "output") { Remove-Item -Recurse -Force "output" }
 
             $args2 = @(
@@ -141,20 +145,21 @@ jobs:
 
             try {
               npx --yes nativefier @args2 "index.html" "./output"
-              if ((Get-ChildItem -Path "output" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue)) {
-                Write-Host "Method 2 produced an EXE successfully."
+              $exe = Get-ChildItem -Path "output" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue
+              if ($exe) {
+                Write-Host "הצלחה! שיטה 2 יצרה את קובץ ה-EXE בהצלחה."
                 $success = $true
               }
             } catch {
-              Write-Warning "Method 2 failed."
+              Write-Warning "שיטה 2 נכשלה, עובר לשיטת הגיבוי האחרונה..."
             }
           }
 
           # ==========================================
-          # שיטה 3: אריזה בסיסית ונקייה לחלוטין (Fallback B)
+          # שיטה 3: אריזה בסיסית ונקייה
           # ==========================================
           if (-not $success) {
-            Write-Host "`n>>> [Method 3/3] Trying ultra-basic minimal nativefier build..."
+            Write-Host "`n>>> [שיטה 3 מתוך 3] מנסה אריזה בסיסית ומינימלית..."
             if (Test-Path "output") { Remove-Item -Recurse -Force "output" }
 
             $args3 = @(
@@ -166,34 +171,37 @@ jobs:
 
             try {
               npx --yes nativefier @args3 "index.html" "./output"
-              if ((Get-ChildItem -Path "output" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue)) {
-                Write-Host "Method 3 produced an EXE successfully."
+              $exe = Get-ChildItem -Path "output" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue
+              if ($exe) {
+                Write-Host "הצלחה! שיטה 3 הבסיסית הצליחה לייצר את הקובץ."
                 $success = $true
               }
             } catch {
-              Write-Warning "Method 3 failed."
+              Write-Warning "שיטה 3 נכשלה."
             }
           }
 
           if (-not $success) {
-            Write-Error "CRITICAL: All build methods failed to generate a working EXE."
+            Write-Error "שגיאה קריטית: כל השיטות נכשלו ביצירת קובץ ה-EXE."
             exit 1
           }
 
-          Write-Host "`n>>> Compilation pipeline finished successfully!"
+          Write-Host "`n>>> תהליך היצירה הסתיים בהצלחה רבה!"
 
       - name: Post-Build Compression & Packaging
         shell: pwsh
         run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $exeFiles = Get-ChildItem -Path "output" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue
           if ($exeFiles) {
             foreach ($file in $exeFiles) {
-              Write-Host "SUCCESS: Generated EXE -> $($file.FullName)"
+              Write-Host "קובץ נוצר בהצלחה: $($file.FullName)"
             }
+            Write-Host "מכווץ את כל התיקייה לקובץ ZIP לנוחות הורדה..."
             Compress-Archive -Path "output/*" -DestinationPath "app-release.zip" -Force
-            Write-Host "OK: Created app-release.zip archive successfully."
+            Write-Host "הקובץ app-release.zip נוצר בהצלחה!"
           } else {
-            Write-Error "CRITICAL: No .exe file found after pipeline execution!"
+            Write-Error "שגיאה: לא נמצא קובץ EXE בתיקיית הפלט."
             exit 1
           }
 
