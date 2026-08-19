@@ -1,4 +1,4 @@
-# 🚀 Universal Dynamic App Builder (HTML to EXE)
+# 🚀 כלי אוניברסלי ודינמי לבניית יישומים (מ-HTML ל-EXE)
 
 כלי אוטומטי המבוסס על **GitHub Actions** להמרת אתרי אינטרנט או קבצי HTML מקומיים לאפליקציית Windows שולחנית עצמאית (`.exe`) המבוססת על **.NET 8** ו-**Microsoft WebView2**.
 
