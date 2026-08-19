@@ -74,20 +74,29 @@ jobs:
             cmd.exe /c "npx --yes png-to-ico favicon.png > icon.ico"
           }
 
-      - name: Compile Standalone WebView2 EXE
+      - name: Compile Standalone GUI WebView2 EXE
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           Write-Host ">>> יוצר פרויקט C#..."
 
+          # יצירת פרויקט WinForms
           dotnet new winforms -n UniversalAppProject -o . --force
           dotnet add package Microsoft.Web.WebView2
 
           $appVersion = "${{ github.event.inputs.app_version }}"
           $appName = "${{ github.event.inputs.app_name }}"
 
-          # הטמעת אייקון ומידע על הגרסה ב-csproj
+          # עדכון ה-csproj: ביטול חלון מסוף (WinExe), הטמעת גרסה ואייקון
           $csproj = Get-Content UniversalAppProject.csproj -Raw
+          
+          # הגדרת סוג הפלט כ-WinExe (חלון גרפי בלבד, ללא קונסולה שחורה)
+          if ($csproj -match '<OutputType>Exe</OutputType>') {
+              $csproj = $csproj -replace '<OutputType>Exe</OutputType>', '<OutputType>WinExe</OutputType>'
+          } else {
+              $csproj = $csproj -replace '</PropertyGroup>', "<OutputType>WinExe</OutputType>`n  </PropertyGroup>"
+          }
+
           $versionProps = @"
             <Version>$appVersion</Version>
             <AssemblyVersion>$appVersion</AssemblyVersion>
@@ -105,7 +114,7 @@ jobs:
 
           $source = $env:FINAL_SOURCE
 
-          # קוד התוכנה שכולל בדיקה והתקנה אוטומטית של WebView2
+          # קוד C# מלא עם בדיקה/התקנת WebView2 וטעינת נתיב תקין
           $formCode = @"
           using System;
           using System.IO;
@@ -242,8 +251,8 @@ jobs:
 
           Set-Content -Path "Program.cs" -Value $formCode -Encoding UTF8
 
-          Write-Host ">>> מבצע Publish ל-EXE עצמאי..."
-          dotnet publish -c Release -r win-x64 -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+          Write-Host ">>> מבצע Publish ל-EXE עצמאי (ללא מסוף שחור)..."
+          dotnet publish -c Release -r win-x64 -p:OutputType=WinExe -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
 
           New-Item -ItemType Directory -Force -Path "build_output"
 
