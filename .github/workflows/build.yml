@@ -18,6 +18,11 @@ on:
         required: false
         default: 'אפליקציית שולחן עבודה'
         type: string
+      icon_choice:
+        description: 'שם קובץ האייקון המבוקש מתוך המאגר (למשל: icon1.png או logo.png)'
+        required: false
+        default: 'icon.png'
+        type: string
 
 jobs:
   build:
@@ -41,25 +46,60 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-
 
-      - name: Prepare icon (png -> ico)
+      - name: Pre-flight & Selected Icon Processing
         shell: pwsh
         run: |
-          if (Test-Path "icon.png") {
-            Write-Host "Converting icon.png -> icon.ico"
-            npx --yes png-to-ico icon.png > icon.ico
-          }
+          Write-Host "=== Starting Smart Workspace Inspection ==="
+          if (Test-Path "output") { Remove-Item -Recurse -Force "output" }
 
-      - name: Build EXE with Nativefier
-        shell: pwsh
-        run: |
           if (-not (Test-Path "index.html")) {
-            Write-Error "index.html not found in repo root. Aborting."
+            Write-Error "CRITICAL: index.html is missing from the root directory!"
             exit 1
           }
-          $argsList = @(
-            "--name", "${{ github.event.inputs.app_name }}",
-            "--app-version", "${{ github.event.inputs.app_version }}",
-            "--description", "${{ github.event.inputs.app_description }}",
+
+          $selectedIcon = "${{ github.event.inputs.icon_choice }}"
+          
+          if (-not [string]::IsNullOrWhiteSpace($selectedIcon) -and (Test-Path $selectedIcon)) {
+            Write-Host "Using user-selected icon file: $selectedIcon"
+            $ext = [System.IO.Path]::GetExtension($selectedIcon)
+            
+            if ($ext -eq ".png") {
+              npx --yes png-to-ico $selectedIcon > icon.ico
+              Write-Host "OK: Converted $selectedIcon to icon.ico successfully."
+            } elseif ($ext -eq ".ico") {
+              Copy-Item $selectedIcon "icon.ico"
+              Write-Host "OK: Using selected .ico file directly."
+            }
+          } else {
+            Write-Warning "Selected icon '$selectedIcon' was not found in repository. Falling back to auto-detection..."
+            $fallbackIcon = Get-ChildItem -Path "." -Filter "*.png" | Select-Object -First 1
+            if ($fallbackIcon) {
+              npx --yes png-to-ico $($fallbackIcon.Name) > icon.ico
+              Write-Host "OK: Fallback icon auto-applied from $($fallbackIcon.Name)."
+            }
+          }
+          Write-Host "=== Pre-flight completed successfully ==="
+
+      - name: Multi-Method EXE Compilation Pipeline
+        shell: pwsh
+        run: |
+          $appName = "${{ github.event.inputs.app_name }}"
+          $appVersion = "${{ github.event.inputs.app_version }}"
+          $appDesc = "${{ github.event.inputs.app_description }}"
+          $hasIcon = Test-Path "icon.ico"
+
+          $success = $false
+
+          # ==========================================
+          # שיטה 1: אריזה סטנדרטית עם דגלי אופטימיזציה
+          # ==========================================
+          Write-Host "`n>>> [Method 1/3] Trying standard nativefier packaging..."
+          if (Test-Path "output") { Remove-Item -Recurse -Force "output" }
+          
+          $args1 = @(
+            "--name", $appName,
+            "--app-version", $appVersion,
+            "--description", $appDesc,
             "--single-instance",
             "--background-color", "#ffffff",
             "--disable-gpu-sandbox",
@@ -68,27 +108,100 @@ jobs:
             "--platform", "windows",
             "--arch", "x64"
           )
-          if (Test-Path "icon.ico") {
-            $argsList += "--icon"
-            $argsList += "icon.ico"
-          }
-          Write-Host "Running nativefier with optimized arguments..."
-          npx --yes nativefier @argsList "index.html" "./output"
+          if ($hasIcon) { $args1 += "--icon"; $args1 += "icon.ico" }
 
-      - name: Verify outputs
-        shell: pwsh
-        run: |
-          $exe = Get-ChildItem -Path output -Recurse -Filter *.exe -ErrorAction SilentlyContinue
-          if ($exe) {
-            Write-Host "Build produced EXE successfully!"
-          } else {
-            Write-Error "No EXE was produced."
+          try {
+            npx --yes nativefier @args1 "index.html" "./output"
+            if ((Get-ChildItem -Path "output" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue)) {
+              Write-Host "Method 1 produced an EXE successfully."
+              $success = $true
+            }
+          } catch {
+            Write-Warning "Method 1 failed."
+          }
+
+          # ==========================================
+          # שיטה 2: אריזה עם נטרול Sandbox ומניעת קריסות (Fallback A)
+          # ==========================================
+          if (-not $success) {
+            Write-Host "`n>>> [Method 2/3] Trying robust fallback with disabled security sandboxes..."
+            if (Test-Path "output") { Remove-Item -Recurse -Force "output" }
+
+            $args2 = @(
+              "--name", $appName,
+              "--app-version", $appVersion,
+              "--single-instance",
+              "--disable-gpu",
+              "--insecure",
+              "--tray", "false",
+              "--platform", "windows",
+              "--arch", "x64"
+            )
+            if ($hasIcon) { $args2 += "--icon"; $args2 += "icon.ico" }
+
+            try {
+              npx --yes nativefier @args2 "index.html" "./output"
+              if ((Get-ChildItem -Path "output" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue)) {
+                Write-Host "Method 2 produced an EXE successfully."
+                $success = $true
+              }
+            } catch {
+              Write-Warning "Method 2 failed."
+            }
+          }
+
+          # ==========================================
+          # שיטה 3: אריזה בסיסית ונקייה לחלוטין (Fallback B)
+          # ==========================================
+          if (-not $success) {
+            Write-Host "`n>>> [Method 3/3] Trying ultra-basic minimal nativefier build..."
+            if (Test-Path "output") { Remove-Item -Recurse -Force "output" }
+
+            $args3 = @(
+              "--name", $appName,
+              "--platform", "windows",
+              "--arch", "x64",
+              "--tray", "false"
+            )
+
+            try {
+              npx --yes nativefier @args3 "index.html" "./output"
+              if ((Get-ChildItem -Path "output" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue)) {
+                Write-Host "Method 3 produced an EXE successfully."
+                $success = $true
+              }
+            } catch {
+              Write-Warning "Method 3 failed."
+            }
+          }
+
+          if (-not $success) {
+            Write-Error "CRITICAL: All build methods failed to generate a working EXE."
             exit 1
           }
 
-      - name: Upload EXE artifact
+          Write-Host "`n>>> Compilation pipeline finished successfully!"
+
+      - name: Post-Build Compression & Packaging
+        shell: pwsh
+        run: |
+          $exeFiles = Get-ChildItem -Path "output" -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue
+          if ($exeFiles) {
+            foreach ($file in $exeFiles) {
+              Write-Host "SUCCESS: Generated EXE -> $($file.FullName)"
+            }
+            Compress-Archive -Path "output/*" -DestinationPath "app-release.zip" -Force
+            Write-Host "OK: Created app-release.zip archive successfully."
+          } else {
+            Write-Error "CRITICAL: No .exe file found after pipeline execution!"
+            exit 1
+          }
+
+      - name: Upload EXE Artifact Package
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.app_name }}-v${{ github.event.inputs.app_version }}-EXE
-          path: output/**/*.exe
+          name: ${{ github.event.inputs.app_name }}-v${{ github.event.inputs.app_version }}-Package
+          path: |
+            output/**/*.exe
+            app-release.zip
           retention-days: 7
