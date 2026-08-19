@@ -113,7 +113,6 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path "build_output"
 
-          # איתור דינמי של קובץ ה-EXE שנבנה והעברתו לתיקיית הפלט (ללא תלות בשם מדויק של גרסת ה-netX.X)
           $compiledExe = Get-ChildItem -Path "bin\Release\" -Filter "*.exe" -Recurse | Select-Object -First 1
           if ($compiledExe) {
             Copy-Item $compiledExe.FullName "build_output/"
@@ -123,7 +122,6 @@ jobs:
             exit 1
           }
           
-          # העתקת מקור מקומי במידה וזה לא URL
           if ($source -notmatch "^https?://") {
             if (Test-Path $source) { Copy-Item $source "build_output/" }
           }
@@ -149,9 +147,40 @@ jobs:
             Write-Host ">>> זוהו קבצים בודדים בלבד - מעלה ישירות."
           }
 
+      - name: Health Check & Size Diagnostic Report
+        shell: pwsh
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host "================ דוח בדיקת תקינות ונפח ================"
+          
+          $outputFiles = Get-ChildItem -Path "build_output" -Recurse
+          $totalSize = 0
+
+          foreach ($file in $outputFiles) {
+            if (-not $file.PSIsContainer) {
+              $sizeMB = [Math]::Round($file.Length / 1MB, 2)
+              $totalSize += $file.Length
+              Write-Host " - קובץ: $($file.Name) | נפח: $sizeMB MB"
+            }
+          }
+
+          $totalSizeMB = [Math]::Round($totalSize / 1MB, 2)
+          Write-Host "--------------------------------------------------------"
+          Write-Host " סך הכל נפח תיקיית התוצר: $totalSizeMB MB"
+
+          if ($totalSizeMB -gt 500) {
+            Write-Warning "אזהרה: נפח התוכנה גבוה ממה שצפוי לאפליקציה רזה!"
+          } else {
+            Write-Host "אישור: הנפח תקין לחלוטין ורחוק מאוד מג'יגה-בייטים מיותרים."
+          }
+          Write-Host "========================================================"
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
+          name: Universal-App-Output
+          path: build_output/
+          retention-days: 7
           name: Universal-App-Output
           path: build_output/
           retention-days: 7
