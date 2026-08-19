@@ -1,4 +1,4 @@
-name: Build Lightweight WebView2 EXE
+name: Build Native WebView2 EXE
 
 on:
   workflow_dispatch:
@@ -15,68 +15,101 @@ on:
         type: string
 
 jobs:
-  build-webview2:
+  build-exe:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
         with:
-          node-version: 22
+          dotnet-version: '8.0.x'
 
-      - name: Pre-flight & Cleanup
+      - name: Pre-flight Checks
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host ">>> מכין את הסביבה לבניית אפליקציית WebView2 רזה..."
-          if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
-          if (Test-Path "output") { Remove-Item -Recurse -Force "output" }
-
           if (-not (Test-Path "index.html")) {
             Write-Error "שגיאה קריטית: קובץ ה-index.html לא נמצא!"
             exit 1
           }
-
           if (Test-Path "favicon.png") {
             npx --yes png-to-ico favicon.png > icon.ico
           }
 
-      - name: Build Lightweight Windows App (WebView2)
+      - name: Build Standalone WebView2 EXE
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host ">>> מתקין כלי אריזה מבוסס WebView2 ומייצר את קובץ ה-EXE..."
+          Write-Host ">>> יוצר פרויקט C# מותאם אישית לשימוש ב-WebView2 המובנה של Windows..."
 
-          # התקנת חבילת בנייה קלה המשתמשת בתשתית WebView2 המקורית של Windows
-          npm install -g @neutralinojs/neu
+          # יצירת אפליקציית Windows Forms חדשה ב-C#
+          dotnet new winforms -n VaultApp -o . --force
           
-          # יצירת מבנה אפליקציה רזה
-          mkdir app-source
-          Copy-Item "index.html" "app-source/"
-          if (Test-Path "icon.ico") { Copy-Item "icon.ico" "app-source/" }
+          # הוספת חבילת ה-WebView2 הרשמית של מיקרוסופט
+          dotnet add package Microsoft.Web.WebView2
 
-          # אריזה מותאמת לסביבת חלונות
-          Write-Host "OK: האריזה הסתיימה בהצלחה."
+          # החלפת קוד ה-C# המרכזי כך שיטען ישירות את ה-index.html המקומי באמצעות WebView2
+          $formCode = @"
+          using System;
+          using System.IO;
+          using System.Windows.Forms;
+          using Microsoft.Web.WebView2.Core;
 
-      - name: Compress Output Package
-        shell: pwsh
-        run: |
-          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host ">>> דוחס את התוצר הסופי ל-ZIP קליל..."
-          
-          if (Test-Path "app-source") {
-            & "7z" a -tzip -mx=9 "WebView2-Vault-Release.zip" "app-source/*"
-            Write-Host "OK: הקובץ ארוז ומוכן להורדה."
-          } else {
-            Write-Error "שגיאה: תיקיית המקור לא נמצאה לקחיצה."
-            exit 1
+          namespace VaultApp
+          {
+              public partial class MainForm : Form
+              {
+                  private Microsoft.Web.WebView2.WinForms.WebView2 webView;
+
+                  public MainForm()
+                  {
+                      this.Text = "${{ github.event.inputs.app_name }}";
+                      this.Width = 1024;
+                      this.Height = 768;
+                      this.StartPosition = FormStartPosition.CenterScreen;
+                      
+                      webView = new Microsoft.Web.WebView2.WinForms.WebView2();
+                      webView.Dock = DockStyle.Fill;
+                      this.Controls.Add(webView);
+                      
+                      InitializeAsync();
+                  }
+
+                  private async void InitializeAsync()
+                  {
+                      await webView.EnsureCoreWebView2Async(null);
+                      string indexPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "index.html");
+                      webView.CoreWebView2.Navigate(indexPath);
+                  }
+              }
           }
+          "@
+
+          Set-Content -Path "Program.cs" -Value $formCode -Encoding UTF8
+
+          # העתקת קובץ האתר והאייקון לתיקיית הפלט של הקומפילציה
+          Write-Host ">>> מהדק ומקמפל את קובץ ה-EXE..."
+          dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+
+          # יצירת תיקיית הפצה נקייה
+          New-Item -ItemType Directory -Force -Path "publish_output"
+          Copy-Item "bin\Release\net8.0-windows\win-x64\publish\*.exe" "publish_output/"
+          Copy-Item "index.html" "publish_output/"
+          if (Test-Path "icon.ico") { Copy-Item "icon.ico" "publish_output/" }
+
+          Write-Host "OK: קובץ ה-EXE נוצר בהצלחה!"
+
+      - name: Compress to ZIP
+        shell: pwsh
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          & "7z" a -tzip -mx=9 "WebView2-Native-EXE.zip" "publish_output/*"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WebView2-Vault-EXE
-          path: WebView2-Vault-Release.zip
+          name: Native-WebView2-EXE
+          path: WebView2-Native-EXE.zip
           retention-days: 7
