@@ -36,78 +36,35 @@ jobs:
         with:
           node-version: 22
 
-      - name: Cache Node.js & npx modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-            C:\Users\runneradmin\AppData\Local\npm-cache
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Scan Repository Images & Pre-flight
+      - name: Clean disk space & Pre-flight
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host "=========================================="
-          Write-Host ">>> [עברית] סורק את התמונות הקיימות במאגר..."
-          Write-Host "=========================================="
-
-          $allImages = Get-ChildItem -Path "." -Include "*.png", "*.ico", "*.jpg" -Recurse
-          if ($allImages) {
-            Write-Host "מצאתי את קבצי התמונה הבאים במאגר שלך:"
-            foreach ($img in $allImages) {
-              $sizeKB = [math]::Round($img.Length / 1KB, 2)
-              Write-Host "  - שם: $($img.Name) | גודל: $sizeKB KB"
-            }
-          } else {
-            Write-Host "לא נמצאו קבצי תמונה במאגר."
-          }
-
-          if (Test-Path "dist") { 
-            Remove-Item -Recurse -Force "dist" 
-          }
-          if (Test-Path "output") { 
-            Remove-Item -Recurse -Force "output" 
-          }
-          if (Test-Path "FlatApp") { 
-            Remove-Item -Recurse -Force "FlatApp" 
-          }
+          Write-Host "=== מנקה תיקיות ישנות כדי לפנות מקום בדיסק ==="
+          
+          if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
+          if (Test-Path "output") { Remove-Item -Recurse -Force "output" }
 
           if (-not (Test-Path "index.html")) {
-            Write-Error "שגיאה קריטית: קובץ ה-index.html לא נמצא בתיקיית השורש!"
+            Write-Error "שגיאה קריטית: קובץ ה-index.html לא נמצא!"
             exit 1
           }
-          Write-Host "אישור: קובץ index.html נמצא ותקין."
 
           $selectedIcon = "${{ github.event.inputs.icon_choice }}"
-          Write-Host ">>> בחרת להשתמש באייקון: $selectedIcon"
-          
           if (-not [string]::IsNullOrWhiteSpace($selectedIcon) -and (Test-Path $selectedIcon)) {
-            Write-Host "הקובץ נמצא בהצלחה! מתחיל עיבוד האייקון..."
             $ext = [System.IO.Path]::GetExtension($selectedIcon)
-            
             if ($ext -eq ".png") {
               npx --yes png-to-ico $selectedIcon > icon.ico
-              Write-Host "OK: קובץ ה-PNG הומר בהצלחה לפורמט ICO."
             } elseif ($ext -eq ".ico") {
               Copy-Item $selectedIcon "icon.ico"
-              Write-Host "OK: קובץ ה-ICO הועתק בהצלחה."
             }
-          } else {
-            Write-Host "==> [הודעה] קובץ האייקון '$selectedIcon' אינו קיים. ממשיך בבנייה רגילה ללא אייקון."
           }
-          
-          Write-Host "=== הבדיקות המקדימות הסתיימו בהצלחה ==="
 
       - name: Build EXE with Nativefier
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host "=========================================="
-          Write-Host ">>> [עברית] מתחיל בתהליך יצירת קובץ ה-EXE..."
-          Write-Host "=========================================="
+          Write-Host "=== מתחיל ביצירת קובץ ה-EXE ==="
 
           $appName = "${{ github.event.inputs.app_name }}"
           $appVersion = "${{ github.event.inputs.app_version }}"
@@ -119,9 +76,7 @@ jobs:
             "--app-version", $appVersion,
             "--description", $appDesc,
             "--single-instance",
-            "--background-color", "#ffffff",
             "--disable-gpu-sandbox",
-            "--ignore-certificate-errors",
             "--tray", "false",
             "--platform", "windows",
             "--arch", "x64"
@@ -132,40 +87,23 @@ jobs:
             $argsList += "icon.ico"
           }
 
-          # התקנת כלי הבנייה והרצה שמציגה את כל הפלט הטכני בזמן אמת
           npm install -g nativefier
           nativefier @argsList "index.html" "./dist"
 
-          Write-Host ">>> שלב יצירת קובץ ה-EXE הסתיים."
-
-      - name: Flatten Structure and Zip with 7-Zip
+      - name: Direct Compression with 7-Zip (No Duplication)
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host "=== [עברית] מבצע שטיפת מבנה התיקיות ודחיסה יציבה ==="
+          Write-Host "=== דוחס ישירות את תיקיית הפלט ללא שכבות מיותרות ==="
 
-          # יצירת תיקיית עבודה שטוחה ללא בובות רוסיות
-          New-Item -Path "FlatApp" -ItemType Directory
-
-          # איסוף כל הקבצים שנוצרו בתוך dist והעברתם לתיקיית היעד השטוחה
-          $files = Get-ChildItem -Path "dist" -Recurse -File
-          if ($files) {
-            foreach ($file in $files) {
-              Copy-Item -Path $file.FullName -Destination "FlatApp/"
-            }
-            Write-Host "כל הקבצים חולצו ואורגנו בתיקייה שטוחה בהצלחה."
-          } else {
-            Write-Error "שגיאה קריטית: לא נמצאו קבצים בתיקיית הפלט של הבנייה."
-            exit 1
-          }
-
-          # דחיסה באמצעות 7-Zip כדי להימנע לחלוטין משגיאות זרם ב-PowerShell
-          & "7z" a -tzip Release.zip "./FlatApp/*"
+          # מוצא את התיקייה הפנימית שנוצרה בתוך dist ودוחס אך ורק את התוכן שלה ישירות ל-ZIP
+          $targetDir = (Get-ChildItem -Path "dist" -Directory | Select-Object -First 1).FullName
           
-          if (Test-Path "Release.zip") {
-            Write-Host "OK: קובץ ה-ZIP Release.zip נוצר בהצלחה רבה!"
+          if ($targetDir) {
+            & "7z" a -tzip Release.zip "$targetDir/*"
+            Write-Host "OK: הדחיסה הושלמה בהצלחה בלי לבזבז מקום בדיסק!"
           } else {
-            Write-Error "שגיאה: יצירת קובץ ה-ZIP נכשלה."
+            Write-Error "שגיאה: תיקיית היעד לא נמצאה."
             exit 1
           }
 
@@ -173,7 +111,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.inputs.app_name }}-v${{ github.event.inputs.app_version }}-Package
-          path: |
-            dist/**/*.exe
-            Release.zip
+          path: Release.zip
           retention-days: 7
