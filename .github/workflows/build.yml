@@ -11,12 +11,12 @@ on:
       local_html_file:
         description: 'אופציה 2: קובץ HTML מקומי (רלוונטי אם כתובת האתר ריקה)'
         required: false
-        default: 'index.html'
+        default: '.html'
         type: string
       app_name:
         description: 'שם התוכנה'
         required: true
-        default: 'MyWebApp'
+        default: ''
         type: string
       app_version:
         description: 'גרסת התוכנה (למשל 1.0.0)'
