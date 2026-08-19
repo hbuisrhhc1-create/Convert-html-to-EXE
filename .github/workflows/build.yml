@@ -57,7 +57,7 @@ jobs:
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host ">>> בונה אפליקציית WebView2 מותאמת..."
+          Write-Host ">>> יוצר פרויקט C# מותאם לאפליקציית WebView2..."
 
           dotnet new winforms -n UniversalAppProject -o . --force
           dotnet add package Microsoft.Web.WebView2
@@ -108,17 +108,24 @@ jobs:
 
           Set-Content -Path "Program.cs" -Value $formCode -Encoding UTF8
 
-          Write-Host ">>> מבצע קומפילציה ל-EXE..."
-          dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          Write-Host ">>> מבצע בנייה וקומפילציה מלאה..."
+          dotnet build -c Release
 
           New-Item -ItemType Directory -Force -Path "build_output"
 
-          $compiledExe = Get-ChildItem -Path "bin\Release\" -Filter "*.exe" -Recurse | Select-Object -First 1
+          # חיפוש רחב ומקיף של קובץ ה-EXE בכל תיקיות הפרויקט לאחר הבילד
+          $compiledExe = Get-ChildItem -Path "." -Filter "UniversalAppProject.exe" -Recurse | Select-Object -First 1
+          
+          if (-not $compiledExe) {
+            # חיפוש חלופי לכל קובץ EXE שנוצר תחת Release
+            $compiledExe = Get-ChildItem -Path "bin\Release" -Filter "*.exe" -Recurse | Select-Object -First 1
+          }
+
           if ($compiledExe) {
             Copy-Item $compiledExe.FullName "build_output/"
             Write-Host "אישור: קובץ ה-EXE נמצא והועתק בהצלחה: $($compiledExe.FullName)"
           } else {
-            Write-Error "שגיאה: קובץ ה-EXE המקומפל לא נמצא באף תיקייה."
+            Write-Error "שגיאה קריטית: קובץ ה-EXE המקומפל לא נמצא באף תיקייה."
             exit 1
           }
           
