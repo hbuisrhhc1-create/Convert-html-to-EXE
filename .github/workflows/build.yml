@@ -36,6 +36,11 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Setup Node.js (for icon conversion)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Pre-flight & Validation
         shell: pwsh
         run: |
@@ -65,7 +70,6 @@ jobs:
           $appName = "${{ github.event.inputs.app_name }}"
           $source = "${{ github.event.inputs.target_source }}"
 
-          # כתיבת קוד מלא הכולל גם את ה-Main וגם את ה-MainForm
           $formCode = @"
           using System;
           using System.IO;
@@ -127,21 +131,19 @@ jobs:
 
           Set-Content -Path "Program.cs" -Value $formCode -Encoding UTF8
 
-          Write-Host ">>> מבצע בנייה וקומפילציה מלאה..."
-          dotnet build -c Release
+          Write-Host ">>> מבצע פרסום וקומפילציה מלאה (Publish)..."
+          dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
 
           New-Item -ItemType Directory -Force -Path "build_output"
 
-          $compiledExe = Get-ChildItem -Path "." -Filter "UniversalAppProject.exe" -Recurse | Select-Object -First 1
-          if (-not $compiledExe) {
-            $compiledExe = Get-ChildItem -Path "bin\Release" -Filter "*.exe" -Recurse | Select-Object -First 1
-          }
-
+          # איתור דינמי של קובץ ה-EXE שנוצר בתיקיית הפרסום
+          $compiledExe = Get-ChildItem -Path "bin\Release\" -Filter "*.exe" -Recurse | Select-Object -First 1
+          
           if ($compiledExe) {
             Copy-Item $compiledExe.FullName "build_output/"
             Write-Host "אישור: קובץ ה-EXE נמצא והועתק בהצלחה: $($compiledExe.FullName)"
           } else {
-            Write-Error "שגיאה קריטית: קובץ ה-EXE המקומפל לא נמצא באף תיקייה."
+            Write-Error "שגיאה קריטית: קובץ ה-EXE המקומפל לא נמצא."
             exit 1
           }
           
@@ -150,7 +152,7 @@ jobs:
           }
           if (Test-Path "icon.ico") { Copy-Item "icon.ico" "build_output/" }
 
-      - name: Smart Packaging (Conditional ZIP)
+      - name: Smart Packaging (Conditional ZIP using PowerShell)
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -160,14 +162,14 @@ jobs:
           Write-Host "כמות הקבצים בתיקיית הפלט: $fileCount"
 
           if ($includeAssets -eq "true" -or $fileCount -gt 2) {
-            Write-Host ">>> זוהו מספר קבצים - יוצר קובץ ZIP אוטומטי..."
-            & "7z" a -tzip -mx=9 "UniversalApp-Release.zip" "build_output/*"
+            Write-Host ">>> זוהו מספר קבצים - יוצר קובץ ZIP אוטומטי באמצעות PowerShell..."
+            Compress-Archive -Path "build_output/*" -DestinationPath "UniversalApp-Release.zip" -Force
             
             Remove-Item "build_output" -Recurse -Force
             New-Item -ItemType Directory -Force -Path "build_output"
             Move-Item "UniversalApp-Release.zip" "build_output/"
           } else {
-            Write-Host ">>> זוהו קבצים בודדים בלבד - מעלה ישירות."
+            Write-Host ">>> זוהו קבצים בודדים בלבד - מעלה ישירות ללא ZIP."
           }
 
       - name: Health Check & Size Diagnostic Report
@@ -192,9 +194,9 @@ jobs:
           Write-Host " סך הכל נפח תיקיית התוצר: $totalSizeMB MB"
 
           if ($totalSizeMB -gt 500) {
-            Write-Warning "אזהרה: נפח התוכנה גבוה ממה שצפוי לאפליקציה רזה!"
+            Write-Warning "אזהרה: נפח התוכנה גבוה מהצפוי!"
           } else {
-            Write-Host "אישור: הנפח תקין לחלוטין ורחוק מאוד מג'יגה-בייטים מיותרים."
+            Write-Host "אישור: הנפח תקין לחלוטין ומוכן להפצה."
           }
           Write-Host "========================================================"
 
