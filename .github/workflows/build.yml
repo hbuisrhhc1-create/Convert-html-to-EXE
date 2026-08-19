@@ -181,6 +181,3 @@ jobs:
           name: Universal-App-Output
           path: build_output/
           retention-days: 7
-          name: Universal-App-Output
-          path: build_output/
-          retention-days: 7
