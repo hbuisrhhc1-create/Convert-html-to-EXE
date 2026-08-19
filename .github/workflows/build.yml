@@ -46,14 +46,27 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-
 
-      - name: Pre-flight & Icon Processing
+      - name: Scan Repository Images & Pre-flight
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host "=== [עברית] מתחיל בדיקות מקדימות לסביבת העבודה ==="
-          
+          Write-Host "=========================================="
+          Write-Host ">>> [עברית] סורק את התמונות הקיימות במאגר..."
+          Write-Host "=========================================="
+
+          # סריקת כל קבצי התמונה הקיימים והצגתם ביומן הריצה
+          $allImages = Get-ChildItem -Path "." -Include "*.png", "*.ico", "*.jpg" -Recurse
+          if ($allImages) {
+            Write-Host "מצאתי את קבצי התמונה הבאים במאגר שלך:" -ForegroundColor Green
+            foreach ($img in $allImages) {
+              $sizeKB = [math]::Round($img.Length / 1KB, 2)
+              Write-Host "  - שם: $($img.Name) | גודל: $sizeKB KB | נתיב: $($img.FullName)"
+            }
+          } else {
+            Write-Host "לא נמצאו קבצי תמונה במאגר." -ForegroundColor Yellow
+          }
+
           if (Test-Path "output") { 
-            Write-Host "Cleaning old output directory..."
             Remove-Item -Recurse -Force "output" 
           }
 
@@ -61,26 +74,26 @@ jobs:
             Write-Error "CRITICAL: index.html is missing!"
             exit 1
           }
-          Write-Host "OK: index.html verified."
 
           $selectedIcon = "${{ github.event.inputs.icon_choice }}"
+          Write-Host ">>> בחרת להשתמש באייקון: $selectedIcon" -ForegroundColor Cyan
           
           if (-not [string]::IsNullOrWhiteSpace($selectedIcon) -and (Test-Path $selectedIcon)) {
-            Write-Host "Found custom icon: $selectedIcon. Converting..."
+            Write-Host "הקובץ נמצא בהצלחה! מתחיל עיבוד ואפשור..."
             $ext = [System.IO.Path]::GetExtension($selectedIcon)
             
             if ($ext -eq ".png") {
               npx --yes png-to-ico $selectedIcon > icon.ico
-              Write-Host "OK: Converted to icon.ico"
+              Write-Host "OK: Converted $selectedIcon to icon.ico"
             } elseif ($ext -eq ".ico") {
               Copy-Item $selectedIcon "icon.ico"
-              Write-Host "OK: Copied icon.ico"
+              Write-Host "OK: Copied $selectedIcon to icon.ico"
             }
           } else {
-            Write-Host "==> [הודעה] קובץ האייקון לא נמצא, ממשיך בבנייה רגילה ללא עצירה."
+            Write-Host "==> [הודעה] קובץ האייקון שבחרת '$selectedIcon' לא נמצא. ממשיך בבנייה רגילה." -ForegroundColor Yellow
           }
           
-          Write-Host "=== [עברית] הבדיקות המקדימות הסתיימו בהצלחה ==="
+          Write-Host "=== הבדיקות המקדימות הסתיימו בהצלחה ==="
 
       - name: Build EXE with Nativefier
         shell: pwsh
@@ -113,7 +126,7 @@ jobs:
             $argsList += "icon.ico"
           }
 
-          # הרצה ישירה שמציגה את כל הפלט באנגלית בזמן אמת כמו פעם
+          # הרצה ישירה שמציגה את כל הפלט באנגלית בזמן אמת
           npx --yes nativefier @argsList "index.html" "./output"
 
       - name: Verify outputs and compress
