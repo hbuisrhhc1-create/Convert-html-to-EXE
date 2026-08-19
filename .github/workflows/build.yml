@@ -321,10 +321,58 @@ jobs:
             Write-Error "שגיאה: קובץ ה-EXE לא נוצר."
             exit 1
           }
-          
-          if ($source -notmatch "^https?://") {
-            if (Test-Path $source) { Copy-Item $source "build_output/" }
+
+      - name: Build Executable
+        shell: pwsh
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host ">>> מבצע Publish ל-EXE עצמאי..."
+          dotnet publish -c Release -r win-x64 -p:OutputType=WinExe -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+
+          New-Item -ItemType Directory -Force -Path "build_output"
+
+          $compiledExe = Get-ChildItem -Path "./final_publish" -Filter "*.exe" -File | Select-Object -First 1
+          if ($compiledExe) {
+              Copy-Item $compiledExe.FullName "build_output/"
+              Write-Host ">>> הקובץ הועתק בהצלחה ל-build_output."
+          } else {
+              Write-Error "שגיאה: קובץ ה-EXE לא נוצר."
+              exit 1
           }
+
+      - name: Sign Executable with Persistent Certificate
+        shell: pwsh
+        env:
+          CERT_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host ">>> מפענח ומשתמש בתעודה הקבועה לחתימה..."
+          
+          $certBytes = [System.Convert]::FromBase64String($env:CERT_BASE64)
+          $certPath = "$env:TEMP\temp_cert.pfx"
+          [System.IO.File]::WriteAllBytes($certPath, $certBytes)
+          
+          $signtool = Get-ChildItem "C:\Program Files*\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -First 1
+          
+          if ($signtool) {
+              Write-Host ">>> מחפש את הקובץ לחתימה..."
+              $exeToSign = Get-ChildItem -Path "build_output" -Filter "*.exe" -File | Select-Object -First 1
+              
+              if ($exeToSign) {
+                  Write-Host ">>> חותם על הקובץ: $($exeToSign.Name)..."
+                  & $signtool.exe sign /f $certPath /p "$env:CERT_PASSWORD" /fd SHA256 $exeToSign.FullName
+                  Write-Host ">>> קובץ ה-EXE נחתם בהצלחה!"
+              } else {
+                  Write-Error "שגיאה: קובץ ה-EXE לא נמצא בתיקיית build_output לצורך חתימה."
+                  exit 1
+              }
+          } else {
+              Write-Error "שגיאה: signtool.exe לא נמצא."
+              exit 1
+          }
+          
+          Remove-Item $certPath -Force
 
       - name: Packaging
         shell: pwsh
