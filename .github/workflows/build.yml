@@ -1,27 +1,17 @@
-name: Build EXE
+name: Build Minimal Vault EXE
 
 on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: 'שם התוכנה (למשל: MyVault)'
+        description: 'שם התוכנה'
         required: true
-        default: 'MyVault'
+        default: 'כספת טקסט וקבצים'
         type: string
       app_version:
-        description: 'גרסת התוכנה (למשל: 1.0.0)'
+        description: 'גרסת התוכנה'
         required: true
         default: '1.0.0'
-        type: string
-      app_description:
-        description: 'תיאור קצר לתוכנה'
-        required: false
-        default: 'אפליקציית שולחן עבודה'
-        type: string
-      icon_choice:
-        description: 'שם קובץ האייקון המבוקש (למשל: icon.png)'
-        required: false
-        default: 'icon.png'
         type: string
 
 jobs:
@@ -40,7 +30,7 @@ jobs:
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host "=== מנקה תיקיות ישנות כדי לפנות מקום בדיסק ==="
+          Write-Host ">>> מנקה סביבה ובודק קבצים מקדימים..."
           
           if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
           if (Test-Path "output") { Remove-Item -Recurse -Force "output" }
@@ -49,32 +39,26 @@ jobs:
             Write-Error "שגיאה קריטית: קובץ ה-index.html לא נמצא!"
             exit 1
           }
+          Write-Host "אישור: קובץ index.html נמצא בהצלחה."
 
-          $selectedIcon = "${{ github.event.inputs.icon_choice }}"
-          if (-not [string]::IsNullOrWhiteSpace($selectedIcon) -and (Test-Path $selectedIcon)) {
-            $ext = [System.IO.Path]::GetExtension($selectedIcon)
-            if ($ext -eq ".png") {
-              npx --yes png-to-ico $selectedIcon > icon.ico
-            } elseif ($ext -eq ".ico") {
-              Copy-Item $selectedIcon "icon.ico"
-            }
+          if (Test-Path "favicon.png") {
+            npx --yes png-to-ico favicon.png > icon.ico
+            Write-Host "אישור: אייקון האתר הומר בהצלחה."
           }
 
       - name: Build EXE with Nativefier
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host "=== מתחיל ביצירת קובץ ה-EXE ==="
+          Write-Host ">>> מתחיל בתהליך יצירת קובץ ה-EXE באמצעות Nativefier..."
 
           $appName = "${{ github.event.inputs.app_name }}"
           $appVersion = "${{ github.event.inputs.app_version }}"
-          $appDesc = "${{ github.event.inputs.app_description }}"
           $hasIcon = Test-Path "icon.ico"
 
           $argsList = @(
             "--name", $appName,
             "--app-version", $appVersion,
-            "--description", $appDesc,
             "--single-instance",
             "--disable-gpu-sandbox",
             "--tray", "false",
@@ -89,19 +73,30 @@ jobs:
 
           npm install -g nativefier
           nativefier @argsList "index.html" "./dist"
+          Write-Host ">>> בניית קובץ ה-EXE הסתיימה בהצלחה."
 
-      - name: Direct Compression with 7-Zip (No Duplication)
+      - name: Purge Unwanted Locales & Compress
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host "=== דוחס ישירות את תיקיית הפלט ללא שכבות מיותרות ==="
+          Write-Host ">>> מנקה קבצי שפה מיותרים ודוחס את החבילה..."
 
-          # מוצא את התיקייה הפנימית שנוצרה בתוך dist ودוחס אך ורק את התוכן שלה ישירות ל-ZIP
           $targetDir = (Get-ChildItem -Path "dist" -Directory | Select-Object -First 1).FullName
           
           if ($targetDir) {
-            & "7z" a -tzip Release.zip "$targetDir/*"
-            Write-Host "OK: הדחיסה הושלמה בהצלחה בלי לבזבז מקום בדיסק!"
+            # מחיקת שפות זרות מתיקיית ה-locales והשארת en-US בלבד
+            $localesDir = Join-Path $targetDir "locales"
+            if (Test-Path $localesDir) {
+              Get-ChildItem -Path $localesDir -Exclude "en-US.pak" | Remove-Item -Force -Recurse
+              Write-Host "OK: קבצי השפה המיותרים נמחקו בהצלחה."
+            }
+
+            # הסרת קבצי טקסט ורישיונות מיותרים
+            Get-ChildItem -Path $targetDir -Filter "*.txt" | Remove-Item -Force -ErrorAction SilentlyContinue
+
+            Write-Host ">>> דוחס את התיקייה ל-ZIP קליל ומהיר באמצעות 7-Zip..."
+            & "7z" a -tzip Release-Vault.zip "$targetDir/*"
+            Write-Host "OK: האריזה הסתיימה בהצלחה רבה!"
           } else {
             Write-Error "שגיאה: תיקיית היעד לא נמצאה."
             exit 1
@@ -110,6 +105,6 @@ jobs:
       - name: Upload EXE Artifact Package
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.app_name }}-v${{ github.event.inputs.app_version }}-Package
-          path: Release.zip
+          name: Vault-EXE-Package
+          path: Release-Vault.zip
           retention-days: 7
