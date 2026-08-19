@@ -46,7 +46,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Pre-flight & Validate Target
+      - name: Pre-flight & Validate Assets
         shell: pwsh
         id: config
         run: |
@@ -68,10 +68,57 @@ jobs:
           }
           
           echo "FINAL_SOURCE=$source" >> $env:GITHUB_ENV
-          
-          if (Test-Path "favicon.png") {
-            Write-Host ">>> ממיר אייקון..."
-            cmd.exe /c "npx --yes png-to-ico favicon.png > icon.ico"
+
+          # 1. בדיקת קיומם של קובצי תמונה מקומיים ב-Repository
+          $iconSource = $null
+          if (Test-Path "favicon.png") { $iconSource = "favicon.png" }
+          elseif (Test-Path "icon.png") { $iconSource = "icon.png" }
+
+          # 2. חילוץ חכם של אייקון מהאתר (HTML Regex + Fallback API)
+          if (-not $iconSource -and -not (Test-Path "favicon.ico") -and (-not [string]::IsNullOrWhiteSpace($url))) {
+            try {
+              Write-Host ">>> מנסה לחלץ תגית favicon מתוך קוד ה-HTML של האתר..."
+              $resp = Invoke-WebRequest -Uri $url -UserAgent "Mozilla/5.0" -UseBasicParsing
+              $html = $resp.Content
+              
+              $regex = '<link\s+[^>]*rel=["''](?:shortcut\s+)?(?:apple-touch-)?icon["''][^>]*href=["'']([^"'']+)["'']'
+              $match = [regex]::Match($html, $regex, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+              if (-not $match.Success) {
+                $regexReverse = '<link\s+[^>]*href=["'']([^"'']+)["''][^>]*rel=["''](?:shortcut\s+)?(?:apple-touch-)?icon["'']'
+                $match = [regex]::Match($html, $regexReverse, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+              }
+
+              if ($match.Success) {
+                $rawPath = $match.Groups[1].Value
+                $baseUri = [System.Uri]$url
+                $iconUrl = [System.Uri]::new($baseUri, $rawPath).AbsoluteUri
+                Write-Host ">>> מוריד אייקון שנמצא ב-HTML: $iconUrl"
+                Invoke-WebRequest -Uri $iconUrl -OutFile "remote_favicon.png" -UserAgent "Mozilla/5.0"
+                if (Test-Path "remote_favicon.png") { $iconSource = "remote_favicon.png" }
+              }
+            } catch {
+              Write-Host ">>> חילוץ מתגיות ה-HTML נכשל, עובר לשירות האייקונים..."
+            }
+
+            if (-not $iconSource) {
+              try {
+                $domain = ([System.Uri]$url).Host
+                $faviconApi = "https://www.google.com/s2/favicons?domain=$domain&sz=128"
+                Write-Host ">>> מוריד אייקון ברזולוציה גבוהה עבור הדומיין: $domain"
+                Invoke-WebRequest -Uri $faviconApi -OutFile "remote_favicon.png" -UserAgent "Mozilla/5.0"
+                if (Test-Path "remote_favicon.png") { $iconSource = "remote_favicon.png" }
+              } catch {
+                Write-Host ">>> לא ניתן היה להוריד אייקון מהאתר."
+              }
+            }
+          }
+
+          # 3. המרת קובץ התמונה ל-icon.ico
+          if (Test-Path "favicon.ico") {
+            Copy-Item "favicon.ico" "icon.ico" -Force
+          } elseif ($iconSource) {
+            Write-Host ">>> ממיר את הקובץ '$iconSource' ל-icon.ico..."
+            cmd.exe /c "npx --yes png-to-ico $iconSource > icon.ico"
           }
 
       - name: Compile Standalone GUI WebView2 EXE
@@ -80,17 +127,15 @@ jobs:
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           Write-Host ">>> יוצר פרויקט C#..."
 
-          # יצירת פרויקט WinForms
           dotnet new winforms -n UniversalAppProject -o . --force
           dotnet add package Microsoft.Web.WebView2
 
           $appVersion = "${{ github.event.inputs.app_version }}"
           $appName = "${{ github.event.inputs.app_name }}"
 
-          # עדכון ה-csproj: ביטול חלון מסוף (WinExe), הטמעת גרסה ואייקון
           $csproj = Get-Content UniversalAppProject.csproj -Raw
           
-          # הגדרת סוג הפלט כ-WinExe (חלון גרפי בלבד, ללא קונסולה שחורה)
+          # הגדרת פלט כ-WinExe (ביטול חלון מסוף שחור)
           if ($csproj -match '<OutputType>Exe</OutputType>') {
               $csproj = $csproj -replace '<OutputType>Exe</OutputType>', '<OutputType>WinExe</OutputType>'
           } else {
@@ -107,21 +152,22 @@ jobs:
           
           $csproj = $csproj -replace '</PropertyGroup>', "$versionProps`n  </PropertyGroup>"
           
+          # צריבת האייקון לתוך קובץ ה-EXE במאפייני ה-csproj
           if (Test-Path "icon.ico") {
+            Write-Host ">>> מטמיע את icon.ico בתוך ה-csproj..."
             $csproj = $csproj -replace '</PropertyGroup>', "<ApplicationIcon>icon.ico</ApplicationIcon>`n  </PropertyGroup>"
           }
           Set-Content UniversalAppProject.csproj -Value $csproj -Encoding UTF8
 
           $source = $env:FINAL_SOURCE
 
-          # קוד C# מלא עם בדיקה/התקנת WebView2 וטעינת נתיב תקין
+          # קוד C# מעודכן ונקי מאזהרות (עם טעינת אייקון לחלון וחלץ WebView2)
           $formCode = @"
           using System;
           using System.IO;
           using System.Windows.Forms;
-          using Microsoft.Win32;
           using System.Diagnostics;
-          using System.Net;
+          using System.Net.Http;
           using Microsoft.Web.WebView2.Core;
 
           namespace UniversalAppProject
@@ -139,7 +185,7 @@ jobs:
 
               public partial class MainForm : Form
               {
-                  private Microsoft.Web.WebView2.WinForms.WebView2 webView;
+                  private Microsoft.Web.WebView2.WinForms.WebView2? webView;
 
                   public MainForm()
                   {
@@ -148,10 +194,21 @@ jobs:
                       this.Height = 768;
                       this.StartPosition = FormStartPosition.CenterScreen;
                       
+                      // השתלת סמל החלון וה-Taskbar בזמן ריצה מתוך קובץ ה-EXE המוטמע
+                      try
+                      {
+                          string? exePath = Process.GetCurrentProcess().MainModule?.FileName;
+                          if (!string.IsNullOrEmpty(exePath))
+                          {
+                              this.Icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
+                          }
+                      }
+                      catch { }
+
                       if (!IsWebView2RuntimeInstalled())
                       {
                           DialogResult dialogResult = MessageBox.Show(
-                              "רכיב המערכת WebView2 (הדרוש להפעלת התוכנה) לא מותקן.\nהאם תרצה שהמערכת תוריד ותתקין אותו כעת באופן אוטומטי?", 
+                              "רכיב המערכת WebView2 לא מותקן.\nהאם תרצה שהמערכת תוריד ותתקין אותו כעת באופן אוטומטי?", 
                               "התקנת רכיבים חסרים", 
                               MessageBoxButtons.YesNo, 
                               MessageBoxIcon.Information);
@@ -176,7 +233,7 @@ jobs:
                   {
                       try
                       {
-                          string version = CoreWebView2Environment.GetAvailableBrowserVersionString();
+                          string? version = CoreWebView2Environment.GetAvailableBrowserVersionString();
                           return !string.IsNullOrWhiteSpace(version);
                       }
                       catch (Exception)
@@ -190,13 +247,14 @@ jobs:
                       try
                       {
                           string installerPath = Path.Combine(Path.GetTempPath(), "MicrosoftEdgeWebview2Setup.exe");
-                          using (WebClient client = new WebClient())
+                          using (HttpClient client = new HttpClient())
                           {
-                              client.DownloadFile("https://go.microsoft.com/fwlink/p/?LinkId=2124703", installerPath);
+                              byte[] fileBytes = client.GetByteArrayAsync("https://go.microsoft.com/fwlink/p/?LinkId=2124703").GetAwaiter().GetResult();
+                              File.WriteAllBytes(installerPath, fileBytes);
                           }
                           
-                          Process process = Process.Start(installerPath);
-                          process.WaitForExit();
+                          Process? process = Process.Start(installerPath);
+                          process?.WaitForExit();
                           
                           if (IsWebView2RuntimeInstalled())
                           {
@@ -229,8 +287,8 @@ jobs:
                           if (Uri.IsWellFormedUriString(target, UriKind.Absolute) && target.StartsWith("http", StringComparison.OrdinalIgnoreCase)) {
                               webView.CoreWebView2.Navigate(target);
                           } else {
-                              string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName;
-                              string exeDir = Path.GetDirectoryName(exePath);
+                              string? exePath = Process.GetCurrentProcess().MainModule?.FileName;
+                              string exeDir = !string.IsNullOrEmpty(exePath) ? (Path.GetDirectoryName(exePath) ?? AppDomain.CurrentDomain.BaseDirectory) : AppDomain.CurrentDomain.BaseDirectory;
                               string fullPath = Path.Combine(exeDir, target);
 
                               if (File.Exists(fullPath)) {
@@ -251,7 +309,7 @@ jobs:
 
           Set-Content -Path "Program.cs" -Value $formCode -Encoding UTF8
 
-          Write-Host ">>> מבצע Publish ל-EXE עצמאי (ללא מסוף שחור)..."
+          Write-Host ">>> מבצע Publish ל-EXE עצמאי..."
           dotnet publish -c Release -r win-x64 -p:OutputType=WinExe -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
 
           New-Item -ItemType Directory -Force -Path "build_output"
