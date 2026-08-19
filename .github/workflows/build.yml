@@ -112,7 +112,16 @@ jobs:
           dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 
           New-Item -ItemType Directory -Force -Path "build_output"
-          Copy-Item "bin\Release\net8.0-windows\win-x64\publish\*.exe" "build_output/"
+
+          # איתור דינמי של קובץ ה-EXE שנבנה והעברתו לתיקיית הפלט (ללא תלות בשם מדויק של גרסת ה-netX.X)
+          $compiledExe = Get-ChildItem -Path "bin\Release\" -Filter "*.exe" -Recurse | Select-Object -First 1
+          if ($compiledExe) {
+            Copy-Item $compiledExe.FullName "build_output/"
+            Write-Host "אישור: קובץ ה-EXE נמצא והועתק בהצלחה: $($compiledExe.FullName)"
+          } else {
+            Write-Error "שגיאה: קובץ ה-EXE המקומפל לא נמצא באף תיקייה."
+            exit 1
+          }
           
           # העתקת מקור מקומי במידה וזה לא URL
           if ($source -notmatch "^https?://") {
@@ -129,17 +138,15 @@ jobs:
 
           Write-Host "כמות הקבצים בתיקיית הפלט: $fileCount"
 
-          # אם המשתמש ביקש נכסים מרובים או שיש מעל קובץ אחד והוגדר צורך ב-ZIP
           if ($includeAssets -eq "true" -or $fileCount -gt 2) {
-            Write-Host ">>> זוהו מספר קבצים/הגדרות - יוצר קובץ ZIP אוטומטי..."
+            Write-Host ">>> זוהו מספר קבצים - יוצר קובץ ZIP אוטומטי..."
             & "7z" a -tzip -mx=9 "UniversalApp-Release.zip" "build_output/*"
             
-            # ניקוי התיקייה והשארת ה-ZIP בלבד להעלאה
             Remove-Item "build_output" -Recurse -Force
             New-Item -ItemType Directory -Force -Path "build_output"
             Move-Item "UniversalApp-Release.zip" "build_output/"
           } else {
-            Write-Host ">>> זוהו קבצים בודדים בלבד - מעלה ישירות ללא ZIP מיותר."
+            Write-Host ">>> זוהו קבצים בודדים בלבד - מעלה ישירות."
           }
 
       - name: Upload Artifact
