@@ -1,4 +1,4 @@
-name: Universal Dynamic App Builder
+name: Universal Dynamic App Builder & Signer
 
 on:
   workflow_dispatch:
@@ -74,7 +74,7 @@ jobs:
           if (Test-Path "favicon.png") { $iconSource = "favicon.png" }
           elseif (Test-Path "icon.png") { $iconSource = "icon.png" }
 
-          # 2. חילוץ חכם של אייקון מהאתר (HTML Regex + Fallback API)
+          # 2. חילוץ חכם של אייקון מהאתר
           if (-not $iconSource -and -not (Test-Path "favicon.ico") -and (-not [string]::IsNullOrWhiteSpace($url))) {
             try {
               Write-Host ">>> מנסה לחלץ תגית favicon מתוך קוד ה-HTML של האתר..."
@@ -135,7 +135,6 @@ jobs:
 
           $csproj = Get-Content UniversalAppProject.csproj -Raw
           
-          # הגדרת פלט כ-WinExe (ביטול חלון מסוף שחור)
           if ($csproj -match '<OutputType>Exe</OutputType>') {
               $csproj = $csproj -replace '<OutputType>Exe</OutputType>', '<OutputType>WinExe</OutputType>'
           } else {
@@ -152,7 +151,6 @@ jobs:
           
           $csproj = $csproj -replace '</PropertyGroup>', "$versionProps`n  </PropertyGroup>"
           
-          # צריבת האייקון לתוך קובץ ה-EXE במאפייני ה-csproj
           if (Test-Path "icon.ico") {
             Write-Host ">>> מטמיע את icon.ico בתוך ה-csproj..."
             $csproj = $csproj -replace '</PropertyGroup>', "<ApplicationIcon>icon.ico</ApplicationIcon>`n  </PropertyGroup>"
@@ -161,7 +159,6 @@ jobs:
 
           $source = $env:FINAL_SOURCE
 
-          # קוד C# מעודכן ונקי מאזהרות (עם טעינת אייקון לחלון וחלץ WebView2)
           $formCode = @"
           using System;
           using System.IO;
@@ -194,7 +191,6 @@ jobs:
                       this.Height = 768;
                       this.StartPosition = FormStartPosition.CenterScreen;
                       
-                      // השתלת סמל החלון וה-Taskbar בזמן ריצה מתוך קובץ ה-EXE המוטמע
                       try
                       {
                           string? exePath = Process.GetCurrentProcess().MainModule?.FileName;
@@ -309,52 +305,6 @@ jobs:
 
           Set-Content -Path "Program.cs" -Value $formCode -Encoding UTF8
 
-          Write-Host ">>> מבצע Publish ל-EXE עצמאי..."
-          dotnet publish -c Release -r win-x64 -p:OutputType=WinExe -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
-
-          New-Item -ItemType Directory -Force -Path "build_output"
-
-          $compiledExe = Get-ChildItem -Path "./final_publish" -Filter "*.exe" -File | Select-Object -First 1
-          if ($compiledExe) {
-            Copy-Item $compiledExe.FullName "build_output/"
-          } else {
-            Write-Error "שגיאה: קובץ ה-EXE לא נוצר."
-            exit 1
-          }
-
-      name: Build and Sign App
-
-on:
-  push:
-    branches: [ main, master ]
-  workflow_dispatch:
-    inputs:
-      app_name:
-        description: 'App Name'
-        required: true
-        default: 'MyApp'
-      include_assets:
-        description: 'Include Assets (true/false)'
-        required: false
-        default: 'false'
-
-jobs:
-  build:
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Build Executable
-        shell: pwsh
-        run: |
-          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           Write-Host ">>> מבצע Publish ל-EXE עצמאי..."
           dotnet publish -c Release -r win-x64 -p:OutputType=WinExe -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
 
