@@ -328,6 +328,15 @@ on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'App Name'
+        required: true
+        default: 'MyApp'
+      include_assets:
+        description: 'Include Assets (true/false)'
+        required: false
+        default: 'false'
 
 jobs:
   build:
