@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       website_url:
-        description: 'אופציה 1: כתובת אתר מלאה (למשל https://example.com) - השאר ריק אם תרצה להשתמש בקובץ מקומי'
+        description: 'אופציה 1: כתובת אתר מלאה (למשל https://example.com) - השאר ריק כדי להשתמש בקובץ מקומי'
         required: false
         default: ''
         type: string
       local_html_file:
-        description: 'אופציה 2: קובץ HTML מקומי (רלוונטי רק אם השארת את כתובת האתר ריקה)'
+        description: 'אופציה 2: קובץ HTML מקומי (רלוונטי אם כתובת האתר ריקה)'
         required: false
         default: 'index.html'
         type: string
@@ -19,7 +19,7 @@ on:
         default: 'MyWebApp'
         type: string
       app_version:
-        description: 'גרסת התוכנה'
+        description: 'גרסת התוכנה (למשל 1.0.0)'
         required: true
         default: '1.0.0'
         type: string
@@ -67,7 +67,6 @@ jobs:
             }
           }
           
-          # שמירת המקור כמשתנה סביבה לשלבים הבאים
           echo "FINAL_SOURCE=$source" >> $env:GITHUB_ENV
           
           if (Test-Path "favicon.png") {
@@ -84,20 +83,36 @@ jobs:
           dotnet new winforms -n UniversalAppProject -o . --force
           dotnet add package Microsoft.Web.WebView2
 
-          # הגדרת אייקון בקובץ הפרויקט
-          if (Test-Path "icon.ico") {
-            $csproj = Get-Content UniversalAppProject.csproj -Raw
-            $csproj = $csproj -replace '</PropertyGroup>', "<ApplicationIcon>icon.ico</ApplicationIcon>`n  </PropertyGroup>"
-            Set-Content UniversalAppProject.csproj -Value $csproj -Encoding UTF8
-          }
-
+          $appVersion = "${{ github.event.inputs.app_version }}"
           $appName = "${{ github.event.inputs.app_name }}"
+
+          # הטמעת אייקון ומידע על הגרסה ב-csproj
+          $csproj = Get-Content UniversalAppProject.csproj -Raw
+          $versionProps = @"
+            <Version>$appVersion</Version>
+            <AssemblyVersion>$appVersion</AssemblyVersion>
+            <FileVersion>$appVersion</FileVersion>
+            <Product>$appName</Product>
+            <Company>ינון דרייב</Company>
+          "@
+          
+          $csproj = $csproj -replace '</PropertyGroup>', "$versionProps`n  </PropertyGroup>"
+          
+          if (Test-Path "icon.ico") {
+            $csproj = $csproj -replace '</PropertyGroup>', "<ApplicationIcon>icon.ico</ApplicationIcon>`n  </PropertyGroup>"
+          }
+          Set-Content UniversalAppProject.csproj -Value $csproj -Encoding UTF8
+
           $source = $env:FINAL_SOURCE
 
+          # קוד התוכנה שכולל בדיקה והתקנה אוטומטית של WebView2
           $formCode = @"
           using System;
           using System.IO;
           using System.Windows.Forms;
+          using Microsoft.Win32;
+          using System.Diagnostics;
+          using System.Net;
           using Microsoft.Web.WebView2.Core;
 
           namespace UniversalAppProject
@@ -124,15 +139,79 @@ jobs:
                       this.Height = 768;
                       this.StartPosition = FormStartPosition.CenterScreen;
                       
+                      if (!IsWebView2RuntimeInstalled())
+                      {
+                          DialogResult dialogResult = MessageBox.Show(
+                              "רכיב המערכת WebView2 (הדרוש להפעלת התוכנה) לא מותקן.\nהאם תרצה שהמערכת תוריד ותתקין אותו כעת באופן אוטומטי?", 
+                              "התקנת רכיבים חסרים", 
+                              MessageBoxButtons.YesNo, 
+                              MessageBoxIcon.Information);
+                              
+                          if (dialogResult == DialogResult.Yes)
+                          {
+                              InstallWebView2Runtime();
+                          }
+                          else
+                          {
+                              MessageBox.Show("לא ניתן להפעיל את התוכנה ללא רכיב זה.", "שגיאה", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                              Environment.Exit(0);
+                          }
+                      }
+                      else
+                      {
+                          LoadWebView();
+                      }
+                  }
+
+                  private bool IsWebView2RuntimeInstalled()
+                  {
+                      try
+                      {
+                          string version = CoreWebView2Environment.GetAvailableBrowserVersionString();
+                          return !string.IsNullOrWhiteSpace(version);
+                      }
+                      catch (Exception)
+                      {
+                          return false;
+                      }
+                  }
+
+                  private void InstallWebView2Runtime()
+                  {
+                      try
+                      {
+                          string installerPath = Path.Combine(Path.GetTempPath(), "MicrosoftEdgeWebview2Setup.exe");
+                          using (WebClient client = new WebClient())
+                          {
+                              client.DownloadFile("https://go.microsoft.com/fwlink/p/?LinkId=2124703", installerPath);
+                          }
+                          
+                          Process process = Process.Start(installerPath);
+                          process.WaitForExit();
+                          
+                          if (IsWebView2RuntimeInstalled())
+                          {
+                              LoadWebView();
+                          }
+                          else
+                          {
+                              MessageBox.Show("ההתקנה נכשלה או בוטלה.", "שגיאה", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                              Environment.Exit(0);
+                          }
+                      }
+                      catch (Exception ex)
+                      {
+                          MessageBox.Show("שגיאה במהלך ניסיון ההתקנה: " + ex.Message, "שגיאה", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                          Environment.Exit(0);
+                      }
+                  }
+
+                  private async void LoadWebView()
+                  {
                       webView = new Microsoft.Web.WebView2.WinForms.WebView2();
                       webView.Dock = DockStyle.Fill;
                       this.Controls.Add(webView);
                       
-                      InitializeAsync();
-                  }
-
-                  private async void InitializeAsync()
-                  {
                       try
                       {
                           await webView.EnsureCoreWebView2Async(null);
@@ -154,7 +233,7 @@ jobs:
                       }
                       catch (Exception ex)
                       {
-                          MessageBox.Show("שגיאה בטעינת רכיב ה-WebView2. ודא ש-WebView2 Runtime מותקן במחשב.\n\nפרטי שגיאה: " + ex.Message, "שגיאת הפעלה", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                          MessageBox.Show("שגיאה בטעינת האפליקציה: " + ex.Message, "שגיאה", MessageBoxButtons.OK, MessageBoxIcon.Error);
                       }
                   }
               }
@@ -176,7 +255,6 @@ jobs:
             exit 1
           }
           
-          # העתקת קובץ ה-HTML הספציפי רק אם אנחנו במצב 'קובץ מקומי'
           if ($source -notmatch "^https?://") {
             if (Test-Path $source) { Copy-Item $source "build_output/" }
           }
