@@ -14,7 +14,7 @@ on:
       website_url:
         description: 'כתובת אתר מלאה (למשל https://example.com) - השאר ריק אם משתמש בקובץ מקומי'
         required: false
-        default: 'https://123456-omega-ecru.vercel.app/'
+        default: ''
         type: string
       local_html_file:
         description: 'קובץ HTML מקומי ראשי (רלוונטי רק אם כתובת האתר ריקה)'
@@ -24,7 +24,7 @@ on:
       app_name:
         description: 'שם התוכנה / אפליקציה'
         required: true
-        default: 'כספת טקסט וקבצים'
+        default: ''
         type: string
       app_version:
         description: 'גרסת התוכנה'
@@ -118,7 +118,7 @@ jobs:
           if (Test-Path "icon.png") { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
 
       # ==========================================
-      # בניית Windows ללא צורך בעריכת XML
+      # בניית Windows
       # ==========================================
       - name: Setup .NET SDK
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
@@ -295,7 +295,7 @@ jobs:
               )
               $formCodeLines | Set-Content -Path "Program.cs" -Encoding UTF8
 
-              Write-Host ">>> מריץ תהליך קומפילציה מלא (Publish) ישירות עם פרמטרים מובנים..."
+              Write-Host ">>> מריץ תהליך קומפילציה מלא (Publish)..."
               $publishArgs = @(
                   "publish",
                   "-c", "Release",
@@ -328,6 +328,169 @@ jobs:
 
           Invoke-MassiveWindowsEngine -ScriptBlock $BuildWindowsLogic -ContextName "Windows Compilation Engine"
 
+      - name: Sign Windows Executable
+        if: ${{ env.TARGET_PLATFORM == 'Windows' }}
+        shell: pwsh
+        env:
+          CERT_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          if ([string]::IsNullOrWhiteSpace($env:CERT_BASE64)) { exit 0 }
+          $signtool = (Get-ChildItem "C:\Program Files*\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if (-not $signtool -or -not (Test-Path $signtool)) { exit 0 }
+
+          $certBytes = [System.Convert]::FromBase64String($env:CERT_BASE64)
+          $certPath = "$env:TEMP\temp_cert.pfx"
+          [System.IO.File]::WriteAllBytes($certPath, $certBytes)
+          
+          $exeToSign = Get-ChildItem -Path "build_output" -Filter "*.exe" -File | Select-Object -First 1
+          if ($exeToSign) {
+              & $signtool sign /v /f $certPath /p "$env:CERT_PASSWORD" /tr https://timestamp.digicert.com /td sha256 /fd SHA256 $exeToSign.FullName
+          }
+          Remove-Item $certPath -Force -ErrorAction SilentlyContinue
+
+      # ==========================================
+      # בניית Android
+      # ==========================================
+      - name: Setup Java SDK
+        if: ${{ env.TARGET_PLATFORM == 'Android' }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node.js
+        if: ${{ env.TARGET_PLATFORM == 'Android' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Android SDK
+        if: ${{ env.TARGET_PLATFORM == 'Android' }}
+        uses: android-actions/setup-android@v3
+
+      - name: Compile Android APK with Massive Autonomous Engine
+        if: ${{ env.TARGET_PLATFORM == 'Android' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          $workspaceRoot = $env:GITHUB_WORKSPACE
+
+          function Remove-LockedFolderForce {
+              param([string]$FolderPath)
+              if (Test-Path $FolderPath) {
+                  Stop-Process -Name "node", "java", "gradle", "adb" -Force -ErrorAction SilentlyContinue
+                  Start-Sleep -Seconds 2
+                  Get-ChildItem -Path $FolderPath -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                      try { $_.Attributes = 'Normal' } catch { }
+                  }
+                  for ($i = 1; $i -le 4; $i++) {
+                      try { Remove-Item $FolderPath -Recurse -Force -ErrorAction Stop; break } catch { Start-Sleep -Seconds 3 }
+                  }
+              }
+          }
+
+          function Invoke-MassiveAndroidEngine {
+              param([scriptblock]$ScriptBlock, [string]$ContextName)
+              $maxStrategies = 10
+              $currentStrategy = 1
+              $workspaceRoot = $env:GITHUB_WORKSPACE
+
+              while ($currentStrategy -le $maxStrategies) {
+                  try {
+                      Set-Location $workspaceRoot
+                      Write-Host ">>> [$ContextName] מריץ אסטרטגיית תיקון אנדרואיד מספר $currentStrategy/$maxStrategies..."
+                      & $ScriptBlock
+                      Write-Host ">>> [$ContextName] הבנייה הצליחה!"
+                      return
+                  } catch {
+                      $errorMessage = $_.Exception.Message
+                      Write-Warning "⚠️ שגיאה באנדרואיד (ניסיון $currentStrategy/$maxStrategies): $errorMessage"
+
+                      if ($currentStrategy -eq $maxStrategies) {
+                          Write-Error "❌ כל 10 אסטרטגיות התיקון לאנדרואיד מוצו."
+                          throw $_
+                      }
+
+                      Write-Host ">>> מנוע ה-AI עובר לאסטרטגיית התיקון הבאה..."
+                      Set-Location $workspaceRoot
+                      switch ($currentStrategy) {
+                          1 { Stop-Process -Name "node", "java" -Force -ErrorAction SilentlyContinue; Remove-LockedFolderForce "$workspaceRoot/android_app/platforms" }
+                          2 { npm cache clean --force }
+                          3 { Remove-LockedFolderForce "$workspaceRoot/android_app/plugins" }
+                          4 { npm install -g cordova@latest }
+                          5 { Remove-LockedFolderForce "$workspaceRoot/android_app/.gradle" }
+                          6 { Remove-LockedFolderForce "$workspaceRoot/android_app/www" }
+                          7 { Remove-LockedFolderForce "$workspaceRoot/android_app/platforms/android/app/build" }
+                          8 { Remove-LockedFolderForce "$env:USERPROFILE\.gradle" }
+                          9 { Remove-LockedFolderForce "$workspaceRoot/android_app" }
+                          default { Start-Sleep -Seconds 4 }
+                      }
+
+                      Set-Location $workspaceRoot
+                      $currentStrategy++
+                      Start-Sleep -Seconds 3
+                  }
+              }
+          }
+
+          $BuildAndroidLogic = {
+              Set-Location $workspaceRoot
+              Write-Host ">>> מוודא התקנת Cordova..."
+              npm install -g cordova
+
+              if (-not (Test-Path "$workspaceRoot/android_app")) {
+                  cordova create android_app com.universal.app "AppTempName"
+              }
+
+              if ($env:ICON_AVAILABLE == 'true' -and (Test-Path "$workspaceRoot/icon.png")) {
+                  Copy-Item "$workspaceRoot/icon.png" "$workspaceRoot/android_app/icon.png" -Force -ErrorAction SilentlyContinue
+              }
+
+              Set-Location "$workspaceRoot/android_app"
+              if (-not (Test-Path "platforms/android")) {
+                  cordova platform add android
+              }
+
+              $source = $env:FINAL_SOURCE
+              $isUrl = $env:IS_URL
+              $appName = $env:APP_NAME
+              
+              $safeAppNameXml = [System.Security.SecurityElement]::Escape($appName)
+              $configPath = "config.xml"
+              if (Test-Path $configPath) {
+                  $configContent = Get-Content $configPath -Raw
+                  $configContent = $configContent -replace '<name>AppTempName</name>', "<name>$safeAppNameXml</name>"
+                  $configContent = $configContent -replace '<content src="index\.html"\s*/>', "<content src=`"$source`" />"
+
+                  if ($env:ICON_AVAILABLE == 'true') {
+                      $configContent = $configContent -replace '</widget>', "<icon src=`"icon.png`" />`n</widget>"
+                  }
+
+                  if ($isUrl == 'true') {
+                    $configContent = $configContent -replace '</widget>', "<access origin=`"*`" />`n<allow-navigation href=`"*`" />`n</widget>"
+                  } else {
+                    if (Test-Path "www") { Remove-Item "www\*" -Recurse -Force -ErrorAction SilentlyContinue }
+                    New-Item -ItemType Directory -Force -Path "www" | Out-Null
+                    Get-ChildItem -Path $workspaceRoot -Exclude "android_app", "icon.png", "src_win", ".git", ".github", "build_output" | Copy-Item -Destination "www" -Recurse -Force
+                  }
+                  Set-Content $configPath -Value $configContent -Encoding UTF8
+              }
+              
+              Write-Host ">>> מקמפל APK במצב Release..."
+              cordova build android --release
+
+              New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
+              $apkFile = Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" -File | Select-Object -First 1
+              if ($apkFile) {
+                  Copy-Item $apkFile.FullName -Destination "$workspaceRoot/build_output/$($env:SAFE_FILE_NAME).apk" -Force
+              }
+          }
+
+          Invoke-MassiveAndroidEngine -ScriptBlock $BuildAndroidLogic -ContextName "Android Build Engine"
+
       # ==========================================
       # סיכום והעלאה
       # ==========================================
@@ -359,6 +522,6 @@ jobs:
           tag_name: v${{ env.APP_VERSION }}-build-${{ github.run_number }}
           name: '${{ env.APP_NAME }} v${{ env.APP_VERSION }} (${{ env.TARGET_PLATFORM }})'
           body: |
-            האפליקציה נוצרה בהצלחה ללא שגיאות XML.
+            האפליקציה נוצרה בהצלחה.
           draft: false
           prerelease: false
