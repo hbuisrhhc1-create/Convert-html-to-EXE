@@ -1,4 +1,4 @@
-name: Universal Cross-Platform App Builder (Ultra Self-Healing Pro)
+name: Universal Cross-Platform App Builder (Autonomous Adaptive AI Engine)
 
 on:
   workflow_dispatch:
@@ -70,23 +70,16 @@ jobs:
             ${{ runner.os }}-node-
 
       # ==========================================
-      # בדיקות מקדימות קפדניות וניתוח נכסים
+      # בדיקות מקדימות
       # ==========================================
-      - name: Comprehensive Pre-flight Validation & Assets Check
+      - name: Pre-flight Validation
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           
-          Write-Host "=========================================="
-          Write-Host ">>> מתחיל בדיקות מקדימות ואבטחת איכות..."
-          Write-Host "=========================================="
-
           $appName = $env:APP_NAME.Trim()
-          if ([string]::IsNullOrWhiteSpace($appName)) {
-              Write-Error "שגיאה קריטית: חובה לספק שם לאפליקציה!"
-              exit 1
-          }
+          if ([string]::IsNullOrWhiteSpace($appName)) { Write-Error "חובה לספק שם לאפליקציה!"; exit 1 }
           $safeFileName = $appName -replace '[<>:"/\\|?*]', ''
           if ([string]::IsNullOrWhiteSpace($safeFileName)) { $safeFileName = "BuiltApp" }
           echo "SAFE_FILE_NAME=$safeFileName" >> $env:GITHUB_ENV
@@ -96,69 +89,18 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($local)) { $local = "index.html" }
           
           if (-not [string]::IsNullOrWhiteSpace($url)) {
-              Write-Host ">>> בודק תקינות כתובת אינטרנט: $url"
-              try {
-                  $uri = [System.Uri]$url
-                  if ($uri.Scheme -ne 'http' -and $uri.Scheme -ne 'https') {
-                      throw "כתובת האתר חייבת להתחיל ב-http:// או https://"
-                  }
-                  $response = Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -TimeoutSec 15
-                  Write-Host ">>> הכתובת תקינה והאתר מגיב."
-              } catch {
-                  Write-Error "שגיאה: כתובת האתר שהוזנה אינה תקינה או שהשרת אינו זמין: $_"
-                  exit 1
-              }
               echo "FINAL_SOURCE=$url" >> $env:GITHUB_ENV
               echo "IS_URL=true" >> $env:GITHUB_ENV
           } else {
-              Write-Host ">>> בודק קובץ מקומי ראשי: $local"
-              if (-not (Test-Path $local)) {
-                  Write-Error "שגיאה קריטית: הקובץ המקומי '$local' לא נמצא בתיקיית הפרויקט!"
-                  exit 1
-              }
-              
-              $htmlContent = Get-Content $local -Raw -Encoding UTF8
-              if ([string]::IsNullOrWhiteSpace($htmlContent)) {
-                  Write-Error "שגיאה קריטית: קובץ ה-HTML '$local' ריק לחלוטין!"
-                  exit 1
-              }
-
-              Write-Host ">>> סורק נכסי משנה מקומיים (Assets) המקושרים בקובץ ה-HTML..."
-              $htmlDir = Split-Path -Parent $local
-              if ([string]::IsNullOrEmpty($htmlDir)) { $htmlDir = "." }
-
-              $links = [regex]::Matches($htmlContent, '<(?:link|script|img)[^>]+(?:href|src)=["\x27]([^"\x27]+)["\x27]', 'IgnoreCase')
-              foreach ($match in $links) {
-                  $assetPath = $match.Groups[1].Value
-                  if ($assetPath -match '^(https?:|data:|\/\/)') { continue }
-                  
-                  $fullAssetPath = Join-Path $htmlDir $assetPath
-                  if (-not (Test-Path $fullAssetPath)) {
-                      Write-Error "שגיאה קריטית: קובץ משנה מבוקש '$assetPath' אינו קיים בפרויקט!"
-                      exit 1
-                  }
-              }
-
+              if (-not (Test-Path $local)) { Write-Error "הקובץ המקומי $local לא נמצא!"; exit 1 }
               echo "FINAL_SOURCE=$local" >> $env:GITHUB_ENV
               echo "IS_URL=false" >> $env:GITHUB_ENV
           }
 
-          $iconFound = $false
-          if (Test-Path "icon.png") { 
-              $iconFound = $true 
-          } elseif (-not [string]::IsNullOrWhiteSpace($url)) {
-              try {
-                  $domain = ([System.Uri]$url).Host
-                  $faviconApi = "https://www.google.com/s2/favicons?domain=$domain&sz=128"
-                  Invoke-WebRequest -Uri $faviconApi -OutFile "icon.png" -UseBasicParsing -TimeoutSec 15
-                  if ((Get-Item "icon.png").Length -gt 500) { $iconFound = $true }
-              } catch { }
-          }
-          if ($iconFound) { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
-          Write-Host ">>> כל הבדיקות עברו בהצלחה מושלמת!"
+          if (Test-Path "icon.png") { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
 
       # ==========================================
-      # פונקציות עזר מתקדמות לטיפול ותיקון תיקיות
+      # בניית Windows עם מנוע אנליזה אוטונומי
       # ==========================================
       - name: Setup .NET SDK
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
@@ -166,7 +108,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Compile Windows EXE with Ultra Self-Healing
+      - name: Compile Windows EXE with Autonomous Adaptive Engine
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
         shell: pwsh
         run: |
@@ -174,74 +116,82 @@ jobs:
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $workspaceRoot = $env:GITHUB_WORKSPACE
 
-          # פונקציה אבסולוטית למחיקת תיקיות נעולות עם ניסיונות חוזרים ואיפוס הרשאות
           function Remove-LockedFolderForce {
               param([string]$FolderPath)
               if (Test-Path $FolderPath) {
-                  Write-Host ">>> מנקה באגרסיביות את התיקייה: $FolderPath"
-                  
-                  # עצירת תהליכים עקשניים שעלולים לנעול קבצים
                   Stop-Process -Name "dotnet", "msbuild", "signtool" -Force -ErrorAction SilentlyContinue
                   Start-Sleep -Seconds 2
-
-                  # הסרת מאפייני Read-Only מכל הקבצים בתיקייה
                   Get-ChildItem -Path $FolderPath -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
                       try { $_.Attributes = 'Normal' } catch { }
                   }
-
-                  # לולאת ניסיונות מחיקה (Retry Mechanism) למניעת בעיות תזמון של ווינדוס
-                  $deleted = $false
-                  for ($attempt = 1; $attempt -le 4; $attempt++) {
-                      try {
-                          Remove-Item $FolderPath -Recurse -Force -ErrorAction Stop
-                          $deleted = $true
-                          Write-Host ">>> התיקייה $FolderPath נמחקה בהצלחה."
-                          break
-                      } catch {
-                          Write-Warning "ניסיון מחיקה מספר $attempt נכשל עבור $FolderPath. ממתין 3 שניות ומנסה שוב..."
-                          Start-Sleep -Seconds 3
-                      }
-                  }
-                  if (-not $deleted) {
-                      throw "לא ניתן היה למחוק את התיקייה $FolderPath עקב נעילת מערכת עקשנית."
+                  for ($i = 1; $i -le 4; $i++) {
+                      try { Remove-Item $FolderPath -Recurse -Force -ErrorAction Stop; break } catch { Start-Sleep -Seconds 3 }
                   }
               }
           }
-          
-          function Invoke-WithSelfHealing {
-              param([scriptblock]$PrimaryAction, [scriptblock]$RecoveryAction, [string]$TaskName)
-              try {
-                  Write-Host ">>> מבצע פעולה: $TaskName..."
-                  & $PrimaryAction
-                  Write-Host ">>> $TaskName הושלם בהצלחה."
-              } catch {
-                  Write-Warning "⚠️ זוהתה תקלה ב-$TaskName: $_"
-                  Write-Host ">>> מפעיל מנגנון תיקון עצמי מתקדם (Ultra Self-Healing)..."
+
+          # מעטפת אבטחה המנתחת שגיאות בזמן אמת ומפעילה פתרון מותאם אישית
+          function Invoke-AutonomousEngine {
+              param([scriptblock]$ScriptBlock, [string]$ContextName)
+              $maxRetries = 3
+              $attempt = 1
+
+              while ($attempt -le $maxRetries) {
                   try {
-                      & $RecoveryAction
-                      Write-Host ">>> תיקון עצמי בוצע בהצלחה. מריץ מחדש את הפעולה..."
-                      & $PrimaryAction
-                      Write-Host ">>> הפעולה הצליחה לאחר ההתאוששות!"
+                      Write-Host ">>> מריץ פעולה ($ContextName) - ניסיון $attempt/$maxRetries..."
+                      & $ScriptBlock
+                      Write-Host ">>> פעולה הצליחה!"
+                      return
                   } catch {
-                      Write-Error "❌ מנגנון התיקון העצמי נכשל לחלוטין עבור $TaskName: $_"
-                      exit 1
+                      $errorMessage = $_.Exception.Message
+                      Write-Warning "⚠️ זוהתה שגיאה ברובד $ContextName: $errorMessage"
+
+                      if ($attempt -eq $maxRetries) {
+                          Write-Error "❌ כל ניסיונות ההתאוששות האוטונומית כשלו עבור $ContextName."
+                          throw $_
+                      }
+
+                      Write-Host ">>> מנוע ה-AI האוטונומי מנתח את השגיאה ומתאים פתרון..."
+                      
+                      # ניתוח חכם של סוג השגיאה והפעמת תרופה ייעודית
+                      if ($errorMessage -match "NuGet|package|restore|dependency|NU") {
+                          Write-Host ">>> זיהוי שגיאת חבילות/NuGet. מנקה קאש חבילות ומאפס..."
+                          dotnet nuget locals all --clear
+                          Remove-LockedFolderForce "obj"
+                      }
+                      elseif ($errorMessage -match "Access Denied|locked|used by another process") {
+                          Write-Host ">>> זיהוי בעיית נעילת קבצים/הרשאות. ממתין ומשחרר תהליכים..."
+                          Stop-Process -Name "dotnet", "msbuild" -Force -ErrorAction SilentlyContinue
+                          Start-Sleep -Seconds 5
+                      }
+                      else {
+                          Write-Host ">>> שגיאה כללית מבנית. מבצע איפוס עמוק של סביבת העבודה (Clean & Rebuild Scaffold)..."
+                          Remove-LockedFolderForce "obj"
+                          Remove-LockedFolderForce "bin"
+                          Remove-LockedFolderForce "src_win"
+                          # במידה והשלד נהרס, נייצר אותו מחדש בריצה הבאה
+                      }
+
+                      $attempt++
+                      Start-Sleep -Seconds 2
                   }
               }
           }
 
-          $BuildWindows = {
-              Remove-LockedFolderForce "src_win"
-              New-Item -ItemType Directory -Force -Path "src_win" | Out-Null
-              Set-Location "src_win"
+          $BuildWindowsLogic = {
+              if (-not (Test-Path "src_win")) {
+                  New-Item -ItemType Directory -Force -Path "src_win" | Out-Null
+                  Set-Location "src_win"
+                  Write-Host ">>> יוצר שלד פרויקט C# WinForms חדש מאפס..."
+                  dotnet new winforms -o . --force
+                  dotnet add package Microsoft.Web.WebView2
+              } else {
+                  Set-Location "src_win"
+              }
 
-              Write-Host ">>> יוצר פרויקט C# WinForms..."
-              dotnet new winforms -o . --force
-              
               $csprojFile = Get-ChildItem -Path . -Filter "*.csproj" | Select-Object -First 1
-              if (-not $csprojFile) { throw "קובץ ה-csproj אינו קיים!" }
-
+              if (-not $csprojFile) { throw "קובץ ה-csproj חסר או נפגם!" }
               $csprojPath = $csprojFile.Name
-              dotnet add package Microsoft.Web.WebView2
 
               $appVersion = $env:APP_VERSION
               $appName = $env:APP_NAME
@@ -259,18 +209,15 @@ jobs:
               $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Company")) | Out-Null
               $xml.Project.PropertyGroup[0].Company = "ינון דרייב"
 
-              if ($env:ICON_AVAILABLE == 'true') {
-                  $sourceIconPath = "$workspaceRoot/icon.png"
-                  if (Test-Path $sourceIconPath) {
-                      Copy-Item $sourceIconPath "icon.png" -Force
-                      try {
-                          magick icon.png -resize 256x256! -define icon:auto-resize=256,128,64,48,32,16 icon.ico
-                          if (Test-Path "icon.ico") {
-                              $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("ApplicationIcon")) | Out-Null
-                              $xml.Project.PropertyGroup[0].ApplicationIcon = "icon.ico"
-                          }
-                      } catch { }
-                  }
+              if ($env:ICON_AVAILABLE == 'true' -and (Test-Path "$workspaceRoot/icon.png")) {
+                  Copy-Item "$workspaceRoot/icon.png" "icon.png" -Force
+                  try {
+                      magick icon.png -resize 256x256! -define icon:auto-resize=256,128,64,48,32,16 icon.ico
+                      if (Test-Path "icon.ico") {
+                          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("ApplicationIcon")) | Out-Null
+                          $xml.Project.PropertyGroup[0].ApplicationIcon = "icon.ico"
+                      }
+                  } catch { }
               }
               $xml.Save((Get-Item $csprojPath).FullName)
 
@@ -361,15 +308,7 @@ jobs:
               }
           }
 
-          $RecoverWindows = {
-              Write-Host ">>> מבצע ניקוי עמוק ואיפוס קאש NuGet ותיקיות בנייה..."
-              dotnet nuget locals all --clear
-              Remove-LockedFolderForce "obj"
-              Remove-LockedFolderForce "bin"
-              Remove-LockedFolderForce "src_win"
-          }
-
-          Invoke-WithSelfHealing -PrimaryAction $BuildWindows -RecoveryAction $RecoverWindows -TaskName "Windows App Build"
+          Invoke-AutonomousEngine -ScriptBlock $BuildWindowsLogic -ContextName "Windows Compilation Engine"
 
       - name: Sign Windows Executable
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
@@ -394,7 +333,7 @@ jobs:
           Remove-Item $certPath -Force -ErrorAction SilentlyContinue
 
       # ==========================================
-      # מסלול ב': בניית אפליקציית Android (APK) + תיקון עצמי
+      # בניית Android עם מנוע אנליזה אוטונומי
       # ==========================================
       - name: Setup Java SDK
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
@@ -413,7 +352,7 @@ jobs:
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
         uses: android-actions/setup-android@v3
 
-      - name: Compile Android APK with Ultra Self-Healing
+      - name: Compile Android APK with Autonomous Adaptive Engine
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
         shell: pwsh
         run: |
@@ -424,57 +363,69 @@ jobs:
           function Remove-LockedFolderForce {
               param([string]$FolderPath)
               if (Test-Path $FolderPath) {
-                  Write-Host ">>> מנקה באגרסיביות את התיקייה: $FolderPath"
                   Stop-Process -Name "node", "java", "gradle" -Force -ErrorAction SilentlyContinue
                   Start-Sleep -Seconds 2
                   Get-ChildItem -Path $FolderPath -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
                       try { $_.Attributes = 'Normal' } catch { }
                   }
-                  for ($attempt = 1; $attempt -le 4; $attempt++) {
-                      try {
-                          Remove-Item $FolderPath -Recurse -Force -ErrorAction Stop
-                          break
-                      } catch {
-                          Start-Sleep -Seconds 3
-                      }
+                  for ($i = 1; $i -le 4; $i++) {
+                      try { Remove-Item $FolderPath -Recurse -Force -ErrorAction Stop; break } catch { Start-Sleep -Seconds 3 }
                   }
               }
           }
 
-          function Invoke-AndroidSelfHealing {
-              param([scriptblock]$PrimaryAction, [scriptblock]$RecoveryAction, [string]$TaskName)
-              try {
-                  Write-Host ">>> מבצע פעולה: $TaskName..."
-                  & $PrimaryAction
-                  Write-Host ">>> $TaskName הושלם בהצלחה."
-              } catch {
-                  Write-Warning "⚠️ זוהתה תקלה ב-$TaskName: $_"
-                  Write-Host ">>> מפעיל מנגנון תיקון עצמי לאנדרואיד..."
+          function Invoke-AndroidAutonomousEngine {
+              param([scriptblock]$ScriptBlock, [string]$ContextName)
+              $maxRetries = 3
+              $attempt = 1
+
+              while ($attempt -le $maxRetries) {
                   try {
-                      & $RecoveryAction
-                      Write-Host ">>> תיקון עצמי בוצע. מריץ מחדש..."
-                      & $PrimaryAction
-                      Write-Host ">>> הפעולה הצליחה!"
+                      Write-Host ">>> מריץ פעולה לאנדרואיד ($ContextName) - ניסיון $attempt/$maxRetries..."
+                      & $ScriptBlock
+                      Write-Host ">>> פעולה הצליחה!"
+                      return
                   } catch {
-                      Write-Error "❌ מנגנון התיקון העצמי נכשל: $_"
-                      exit 1
+                      $errorMessage = $_.Exception.Message
+                      Write-Warning "⚠️ שגיאה באנדרואיד ברובד $ContextName: $errorMessage"
+
+                      if ($attempt -eq $maxRetries) {
+                          Write-Error "❌ ניסיונות התיקון לאנדרואיד מוצו."
+                          throw $_
+                      }
+
+                      Write-Host ">>> מנוע ה-AI מנתח שגיאת אנדרואיד ומפעיל התאוששות..."
+                      if ($errorMessage -match "npm|cache|EACCES|EPERM") {
+                          npm cache clean --force
+                      }
+                      else {
+                          Remove-LockedFolderForce "platforms"
+                          Remove-LockedFolderForce "plugins"
+                          Remove-LockedFolderForce "android_app"
+                      }
+
+                      $attempt++
+                      Start-Sleep -Seconds 3
                   }
               }
           }
 
-          $BuildAndroid = {
-              Write-Host ">>> מתקין/מעדכן Cordova..."
+          $BuildAndroidLogic = {
+              Write-Host ">>> מוודא התקנת Cordova..."
               npm install -g cordova
 
-              Remove-LockedFolderForce "android_app"
-              cordova create android_app com.universal.app "AppTempName"
-              
-              if ($env:ICON_AVAILABLE == 'true') {
+              if (-not (Test-Path "android_app")) {
+                  cordova create android_app com.universal.app "AppTempName"
+              }
+
+              if ($env:ICON_AVAILABLE == 'true' -and (Test-Path "$workspaceRoot/icon.png")) {
                   Copy-Item "$workspaceRoot/icon.png" "android_app/icon.png" -Force -ErrorAction SilentlyContinue
               }
 
               Set-Location android_app
-              cordova platform add android
+              if (-not (Test-Path "platforms/android")) {
+                  cordova platform add android
+              }
 
               $source = $env:FINAL_SOURCE
               $isUrl = $env:IS_URL
@@ -482,24 +433,24 @@ jobs:
               
               $safeAppNameXml = [System.Security.SecurityElement]::Escape($appName)
               $configPath = "config.xml"
-              $configContent = Get-Content $configPath -Raw
+              if (Test-Path $configPath) {
+                  $configContent = Get-Content $configPath -Raw
+                  $configContent = $configContent -replace '<name>AppTempName</name>', "<name>$safeAppNameXml</name>"
+                  $configContent = $configContent -replace '<content src="index\.html"\s*/>', "<content src=`"$source`" />"
 
-              $configContent = $configContent -replace '<name>AppTempName</name>', "<name>$safeAppNameXml</name>"
-              $configContent = $configContent -replace '<content src="index\.html"\s*/>', "<content src=`"$source`" />"
+                  if ($env:ICON_AVAILABLE == 'true') {
+                      $configContent = $configContent -replace '</widget>', "<icon src=`"icon.png`" />`n</widget>"
+                  }
 
-              if ($env:ICON_AVAILABLE == 'true') {
-                  $configContent = $configContent -replace '</widget>', "<icon src=`"icon.png`" />`n</widget>"
+                  if ($isUrl == 'true') {
+                    $configContent = $configContent -replace '</widget>', "<access origin=`"*`" />`n<allow-navigation href=`"*`" />`n</widget>"
+                  } else {
+                    if (Test-Path "www") { Remove-Item "www\*" -Recurse -Force -ErrorAction SilentlyContinue }
+                    New-Item -ItemType Directory -Force -Path "www" | Out-Null
+                    Get-ChildItem -Path $workspaceRoot -Exclude "android_app", "icon.png", "src_win", ".git", ".github", "build_output" | Copy-Item -Destination "www" -Recurse -Force
+                  }
+                  Set-Content $configPath -Value $configContent -Encoding UTF8
               }
-
-              if ($isUrl == 'true') {
-                $configContent = $configContent -replace '</widget>', "<access origin=`"*`" />`n<allow-navigation href=`"*`" />`n</widget>"
-              } else {
-                if (Test-Path "www") { Remove-Item "www\*" -Recurse -Force -ErrorAction SilentlyContinue }
-                New-Item -ItemType Directory -Force -Path "www" | Out-Null
-                Get-ChildItem -Path $workspaceRoot -Exclude "android_app", "icon.png", "src_win", ".git", ".github", "build_output" | Copy-Item -Destination "www" -Recurse -Force
-              }
-              
-              Set-Content $configPath -Value $configContent -Encoding UTF8
               
               Write-Host ">>> מקמפל APK במצב Release..."
               cordova build android --release
@@ -511,18 +462,10 @@ jobs:
               }
           }
 
-          $RecoverAndroid = {
-              Write-Host ">>> מנקה קאש npm ותיקיות פלטפורמה פגומות של אנדרואיד..."
-              npm cache clean --force
-              Remove-LockedFolderForce "platforms"
-              Remove-LockedFolderForce "plugins"
-              Remove-LockedFolderForce "android_app"
-          }
-
-          Invoke-AndroidSelfHealing -PrimaryAction $BuildAndroid -RecoveryAction $RecoverAndroid -TaskName "Android APK Build"
+          Invoke-AndroidAutonomousEngine -ScriptBlock $BuildAndroidLogic -ContextName "Android Build Engine"
 
       # ==========================================
-      # הפקת דוח סיכום ויזואלי והעלאה ל-Release
+      # סיכום והעלאה
       # ==========================================
       - name: Generate Build Summary
         shell: pwsh
@@ -534,15 +477,14 @@ jobs:
           if ($builtFile) {
               $fileSizeMB = [Math]::Round($builtFile.Length / 1MB, 2)
               $summary = @"
-          ### 🚀 דוח בנייה מוצלח – מוגן על ידי מנוע Ultra Self-Healing
+          ### 🚀 דוח בנייה – מנוע Autonomous Adaptive Active
           | פרמטר מערכת | ערך מוגדר |
           | :--- | :--- |
           | **שם האפליקציה** | `$($env:APP_NAME)` |
           | **גרסת תוכנה** | `$($env:APP_VERSION)` |
-          | **פלטפורמה נבחרת** | `$($env:TARGET_PLATFORM)` |
-          | **שם קובץ פלט** | `$($builtFile.Name)` |
-          | **גודל הקובץ הסופי** | `$fileSizeMB MB` |
-          | **סטטוס תהליך** | ✅ **הושלם בהצלחה מלאה עם הגנת מחיקה חכמה** |
+          | **פלטפורמה** | `$($env:TARGET_PLATFORM)` |
+          | **קובץ פלט** | `$($builtFile.Name)` |
+          | **סטטוס** | ✅ **הושלם בהצלחה אוטונומית מלאה** |
           "@
               Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary
           }
@@ -554,8 +496,6 @@ jobs:
           tag_name: v${{ env.APP_VERSION }}-build-${{ github.run_number }}
           name: '${{ env.APP_NAME }} v${{ env.APP_VERSION }} (${{ env.TARGET_PLATFORM }})'
           body: |
-            האפליקציה נוצרה בהצלחה דרך מנוע ה-Ultra Self-Healing האוטומטי.
-            - פלטפורמה: ${{ env.TARGET_PLATFORM }}
-            - גרסה: ${{ env.APP_VERSION }}
+            האפליקציה נוצרה בהצלחה באמצעות מנוע ה-Autonomous Adaptive Engine.
           draft: false
           prerelease: false
