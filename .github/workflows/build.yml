@@ -9,8 +9,8 @@ on:
         default: 'windows'
         type: choice
         options:
-          - windows
-          - android
+          - Windows
+          - Android
       website_url:
         description: 'כתובת אתר מלאה (למשל https://example.com) - השאר ריק אם משתמש בקובץ מקומי'
         required: false
@@ -19,15 +19,15 @@ on:
       local_html_file:
         description: 'קובץ HTML מקומי ראשי (רלוונטי רק אם כתובת האתר ריקה)'
         required: false
-        default: 'index.html'
+        default: '.html'
         type: string
       app_name:
         description: 'שם התוכנה / אפליקציה'
         required: true
-        default: 'MyCoolApp'
+        default: ''
         type: string
       app_version:
-        description: 'גרסת התוכנה (למשל 1.0.0)'
+        description: 'גרסת התוכנה'
         required: true
         default: '1.0.0'
         type: string
