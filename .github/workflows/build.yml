@@ -6,7 +6,7 @@ on:
       target_platform:
         description: 'בחר פלטפורמה ליצירה'
         required: true
-        default: 'windows'
+        default: 'Windows'
         type: choice
         options:
           - Windows
@@ -32,6 +32,13 @@ on:
         default: '1.0.0'
         type: string
 
+env:
+  TARGET_PLATFORM: ${{ github.event.inputs.target_platform }}
+  WEBSITE_URL: ${{ github.event.inputs.website_url }}
+  LOCAL_HTML: ${{ github.event.inputs.local_html_file }}
+  APP_NAME: ${{ github.event.inputs.app_name }}
+  APP_VERSION: ${{ github.event.inputs.app_version }}
+
 jobs:
   build:
     runs-on: windows-latest
@@ -42,9 +49,10 @@ jobs:
       - name: Pre-flight & Icon Fetching
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          $url = "${{ github.event.inputs.website_url }}".Trim()
-          $local = "${{ github.event.inputs.local_html_file }}".Trim()
+          $url = $env:WEBSITE_URL.Trim()
+          $local = $env:LOCAL_HTML.Trim()
           if ([string]::IsNullOrWhiteSpace($local)) { $local = "index.html" }
           
           if (-not [string]::IsNullOrWhiteSpace($url)) {
@@ -64,15 +72,26 @@ jobs:
           $iconFound = $false
           if (Test-Path "icon.png") { 
               $iconFound = $true 
+              Write-Host ">>> נמצא קובץ icon.png מקומי בפרויקט."
           } elseif (-not [string]::IsNullOrWhiteSpace($url)) {
               try {
                   $domain = ([System.Uri]$url).Host
                   $faviconApi = "https://www.google.com/s2/favicons?domain=$domain&sz=128"
-                  Write-Host ">>> מוריד אייקון עבור הדומיין: $domain"
-                  Invoke-WebRequest -Uri $faviconApi -OutFile "icon.png" -UserAgent "Mozilla/5.0"
-                  if (Test-Path "icon.png") { $iconFound = $true }
+                  Write-Host ">>> מנסה להוריד אייקון מהרשת עבור הדומיין: $domain"
+                  Invoke-WebRequest -Uri $faviconApi -OutFile "icon.png" -UseBasicParsing -TimeoutSec 15
+                  
+                  if (Test-Path "icon.png") {
+                      $iconSize = (Get-Item "icon.png").Length
+                      if ($iconSize -gt 500) {
+                          $iconFound = $true
+                          Write-Host ">>> אייקון הורד בהצלחה ממשקל $iconSize בתים."
+                      } else {
+                          Write-Host ">>> האייקון שהורד קטן מדי או ריק, מתעלם (משתמש בברירת מחדל)."
+                          Remove-Item "icon.png" -Force -ErrorAction SilentlyContinue
+                      }
+                  }
               } catch {
-                  Write-Host ">>> לא ניתן היה להוריד אייקון חיצוני."
+                  Write-Host ">>> לא ניתן היה להוריד אייקון חיצוני (שגיאת רשת), נמשיך ללא אייקון מותאם."
               }
           }
           if ($iconFound) { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
@@ -81,38 +100,46 @@ jobs:
       # מסלול א': בניית תוכנת Windows (EXE) + חתימה
       # ==========================================
       - name: Setup .NET SDK
-        if: ${{ github.event.inputs.target_platform == 'Windows' }}
+        if: ${{ env.TARGET_PLATFORM == 'Windows' }}
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
       - name: Compile Windows EXE
-        if: ${{ github.event.inputs.target_platform == 'Windows' }}
+        if: ${{ env.TARGET_PLATFORM == 'Windows' }}
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          $workspaceRoot = $env:GITHUB_WORKSPACE
+          
           Write-Host ">>> מנקה ומכין את תיקיית העבודה לווינדוס..."
-          if (Test-Path "src_win") {
-              Remove-Item "src_win" -Recurse -Force
-          }
-          New-Item -ItemType Directory -Force -Path "src_win"
+          if (Test-Path "src_win") { Remove-Item "src_win" -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path "src_win" | Out-Null
           Set-Location "src_win"
 
           Write-Host ">>> יוצר פרויקט C# WinForms חדש לחלוטין..."
-          dotnet new winforms -n UniversalAppProject
-          if (-not (Test-Path "UniversalAppProject.csproj")) {
+          dotnet new winforms -n UniversalAppProject -f net8.0-windows
+          
+          if (-not (Test-Path "UniversalAppProject/UniversalAppProject.csproj") -and -not (Test-Path "UniversalAppProject.csproj")) {
               Write-Error "שגיאה קריטית: קובץ ה-csproj לא נוצר בהצלחה!"
               exit 1
           }
 
+          if (Test-Path "UniversalAppProject/UniversalAppProject.csproj") {
+              Set-Location "UniversalAppProject"
+          }
+
           dotnet add package Microsoft.Web.WebView2
 
-          $appVersion = "${{ github.event.inputs.app_version }}"
-          $appName = "${{ github.event.inputs.app_name }}"
+          $appVersion = $env:APP_VERSION
+          $appName = $env:APP_NAME
 
           $csprojPath = "UniversalAppProject.csproj"
           [xml]$xml = Get-Content $csprojPath
           $xml.Project.PropertyGroup[0].OutputType = "WinExe"
+          
+          # שימוש ב-AppendChild ב-XML מוודא שגם תווים בעייתיים מטופלים נכון
           $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Version")) | Out-Null
           $xml.Project.PropertyGroup[0].Version = $appVersion
           $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("AssemblyVersion")) | Out-Null
@@ -124,21 +151,28 @@ jobs:
           $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Company")) | Out-Null
           $xml.Project.PropertyGroup[0].Company = "ינון דרייב"
 
-          if ("${{ env.ICON_AVAILABLE }}" -eq 'true') {
-              Copy-Item "../icon.png" "icon.png" -Force
-              Write-Host ">>> ממיר תמונה לאייקון .ico..."
-              cmd.exe /c "npx --yes png-to-ico icon.png > icon.ico"
-              if (Test-Path "icon.ico") {
-                  $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("ApplicationIcon")) | Out-Null
-                  $xml.Project.PropertyGroup[0].ApplicationIcon = "icon.ico"
+          if ($env:ICON_AVAILABLE -eq 'true') {
+              $sourceIconPath = "$workspaceRoot/icon.png"
+              if (Test-Path $sourceIconPath) {
+                  Copy-Item $sourceIconPath "icon.png" -Force
+                  Write-Host ">>> ממיר תמונה לאייקון .ico באמצעות ImageMagick..."
+                  try {
+                      magick icon.png -define icon:auto-resize=256,128,64,48,32,16 icon.ico
+                      if (Test-Path "icon.ico") {
+                          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("ApplicationIcon")) | Out-Null
+                          $xml.Project.PropertyGroup[0].ApplicationIcon = "icon.ico"
+                      }
+                  } catch {
+                      Write-Warning "המרת האייקון נכשלה, ממשיך בבנייה ללא אייקון מותאם."
+                  }
               }
           }
           
           $xml.Save((Get-Item $csprojPath).FullName)
 
           $safeAppName = $appName -replace '"', '\"'
-          $safeSource = "${{ env.FINAL_SOURCE }}" -replace '"', '\"' -replace '\\', '\\\\'
-          $isUrl = "${{ env.IS_URL }}"
+          $safeSource = $env:FINAL_SOURCE -replace '"', '\"' -replace '\\', '\\\\'
+          $isUrl = $env:IS_URL
 
           $formCode = @"
           using System;
@@ -218,13 +252,14 @@ jobs:
           "@
           Set-Content -Path "Program.cs" -Value $formCode -Encoding UTF8
 
+          Write-Host ">>> מקמפל לקובץ בינארי יחיד (EXE)..."
           dotnet publish -c Release -r win-x64 -p:OutputType=WinExe -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
           
-          Set-Location ..
-          New-Item -ItemType Directory -Force -Path "build_output"
-          Get-ChildItem -Path "src_win/final_publish" -Filter "*.exe" | Copy-Item -Destination "build_output/"
+          New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
+          Get-ChildItem -Path "./final_publish" -Filter "*.exe" | Copy-Item -Destination "$workspaceRoot/build_output/"
+
       - name: Sign Windows Executable
-        if: ${{ github.event.inputs.target_platform == 'Windows' }}
+        if: ${{ env.TARGET_PLATFORM == 'Windows' }}
         shell: pwsh
         env:
           CERT_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
@@ -232,66 +267,71 @@ jobs:
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           if ([string]::IsNullOrWhiteSpace($env:CERT_BASE64)) {
-              Write-Host ">>> לא הוגדרה תעודת חתימה (CERTIFICATE_BASE64), מדלג על שלב החתימה..."
+              Write-Host ">>> לא הוגדרה תעודת חתימה, מדלג..."
               exit 0
           }
-          Write-Host ">>> מאתר את signtool.exe..."
-          $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue)?.Source
-          if (-not $signtool) {
-              $signtool = (Get-ChildItem "C:\Program Files*\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -First 1).FullName
-          }
-          if (-not $signtool -or -not (Test-Path $signtool)) {
-              Write-Error "שגיאה: לא ניתן למצוא את כלי החתימה signtool.exe!"
-              exit 1
-          }
+          $signtool = (Get-ChildItem "C:\Program Files*\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if (-not $signtool -or -not (Test-Path $signtool)) { exit 0 }
 
-          Write-Host ">>> חותם על ה-EXE באמצעות HTTPS Timestamp..."
           $certBytes = [System.Convert]::FromBase64String($env:CERT_BASE64)
           $certPath = "$env:TEMP\temp_cert.pfx"
           [System.IO.File]::WriteAllBytes($certPath, $certBytes)
           
           $exeToSign = Get-ChildItem -Path "build_output" -Filter "*.exe" -File | Select-Object -First 1
-          & $signtool sign /v /f $certPath /p "$env:CERT_PASSWORD" /tr https://timestamp.digicert.com /td sha256 /fd SHA256 $exeToSign.FullName
+          if ($exeToSign) {
+              & $signtool sign /v /f $certPath /p "$env:CERT_PASSWORD" /tr https://timestamp.digicert.com /td sha256 /fd SHA256 $exeToSign.FullName
+          }
           Remove-Item $certPath -Force -ErrorAction SilentlyContinue
 
       # ==========================================
       # מסלול ב': בניית אפליקציית Android (APK)
       # ==========================================
       - name: Setup Java SDK
-        if: ${{ github.event.inputs.target_platform == 'Android' }}
+        if: ${{ env.TARGET_PLATFORM == 'Android' }}
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Setup Android SDK
-        if: ${{ github.event.inputs.target_platform == 'Android' }}
+        if: ${{ env.TARGET_PLATFORM == 'Android' }}
         uses: android-actions/setup-android@v3
 
       - name: Compile Android APK (Clean Release)
-        if: ${{ github.event.inputs.target_platform == 'Android' }}
+        if: ${{ env.TARGET_PLATFORM == 'Android' }}
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          $workspaceRoot = $env:GITHUB_WORKSPACE
+          
           Write-Host ">>> מתקין Cordova..."
           npm install -g cordova
 
           Write-Host ">>> יוצר פרויקט אנדרואיד..."
-          cordova create android_app com.yinon.app "${{ github.event.inputs.app_name }}"
+          cordova create android_app com.universal.app "AppTempName"
           
-          if ("${{ env.ICON_AVAILABLE }}" -eq 'true') {
-              Copy-Item "icon.png" "android_app/icon.png" -Force
+          if ($env:ICON_AVAILABLE -eq 'true') {
+              Copy-Item "$workspaceRoot/icon.png" "android_app/icon.png" -Force -ErrorAction SilentlyContinue
           }
 
           Set-Location android_app
           cordova platform add android
 
-          $source = "${{ env.FINAL_SOURCE }}"
-          $isUrl = "${{ env.IS_URL }}"
+          $source = $env:FINAL_SOURCE
+          $isUrl = $env:IS_URL
+          $appName = $env:APP_NAME
+          
+          # הגנה על השם כך שלא ישבור את קובץ ה-XML אם יש בו תווים מיוחדים
+          $safeAppNameXml = [System.Security.SecurityElement]::Escape($appName)
+
           $configPath = "config.xml"
           $configContent = Get-Content $configPath -Raw
 
-          if ("${{ env.ICON_AVAILABLE }}" -eq 'true') {
+          $configContent = $configContent -replace '<name>AppTempName</name>', "<name>$safeAppNameXml</name>"
+
+          if ($env:ICON_AVAILABLE -eq 'true') {
+              Write-Host ">>> מוסיף הגדרות אייקון לאנדרואיד..."
               $configContent = $configContent -replace '</widget>', "<icon src=`"icon.png`" />`n</widget>"
           }
 
@@ -301,7 +341,9 @@ jobs:
             $configContent = $configContent -replace '</widget>', "<access origin=`"*`" />`n<allow-navigation href=`"*`" />`n</widget>"
           } else {
             Write-Host ">>> מעתיק קבצים מקומיים ל-Assets..."
-            Get-ChildItem -Path .. -Exclude "android_app", "icon.png", "src_win", ".git", ".github" | Copy-Item -Destination "www" -Recurse -Force
+            # וידוא שתיקיית www נקייה לחלוטין מתוכן קודם של Cordova
+            if (Test-Path "www") { Remove-Item "www\*" -Recurse -Force -ErrorAction SilentlyContinue }
+            Get-ChildItem -Path $workspaceRoot -Exclude "android_app", "icon.png", "src_win", ".git", ".github", "build_output" | Copy-Item -Destination "www" -Recurse -Force
           }
           
           Set-Content $configPath -Value $configContent -Encoding UTF8
@@ -309,8 +351,8 @@ jobs:
           Write-Host ">>> מקמפל APK (מצב Release נקי)..."
           cordova build android --release
 
-          New-Item -ItemType Directory -Force -Path "../build_output"
-          Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" | Copy-Item -Destination "../build_output/"
+          New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
+          Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" | Copy-Item -Destination "$workspaceRoot/build_output/"
 
       # ==========================================
       # סיום והעלאת קבצים
@@ -318,6 +360,6 @@ jobs:
       - name: Artifact Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.app_name }}-${{ github.event.inputs.target_platform }}-Build
+          name: ${{ env.APP_NAME }}-${{ env.TARGET_PLATFORM }}-Build
           path: build_output/
           retention-days: 7
