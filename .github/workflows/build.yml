@@ -198,19 +198,17 @@ jobs:
           New-Item -ItemType Directory -Force -Path "src_win" | Out-Null
           Set-Location "src_win"
 
-          dotnet new winforms -n UniversalAppProject -f net8.0-windows
+          Write-Host ">>> יוצר פרויקט C# WinForms ישירות בתיקיית העבודה..."
+          dotnet new winforms -o . --force
           
-          $csprojFile = Get-ChildItem -Path . -Filter "UniversalAppProject.csproj" -Recurse | Select-Object -First 1
-          if (-not $csprojFile) {
-              $csprojFile = Get-ChildItem -Path . -Filter "*.csproj" -Recurse | Select-Object -First 1
-          }
+          $csprojFile = Get-ChildItem -Path . -Filter "*.csproj" | Select-Object -First 1
           if (-not $csprojFile) {
               Write-Error "שגיאה קריטית: קובץ ה-csproj אינו קיים!"
               exit 1
           }
 
-          Set-Location $csprojFile.DirectoryName
           $csprojPath = $csprojFile.Name
+          Write-Host ">>> נמצא קובץ פרויקט: $csprojPath"
           dotnet add package Microsoft.Web.WebView2
 
           $appVersion = $env:APP_VERSION
@@ -452,7 +450,7 @@ jobs:
           | פרמטר מערכת | ערך מוגדר |
           | :--- | :--- |
           | **שם האפליקציה** | `$($env:APP_NAME)` |
-          | **גרסת תוכна** | `$($env:APP_VERSION)` |
+          | **גרסת תוכנה** | `$($env:APP_VERSION)` |
           | **פלטפורמה נבחרת** | `$($env:TARGET_PLATFORM)` |
           | **שם קובץ פלט** | `$($builtFile.Name)` |
           | **גודל הקובץ הסופי** | `$fileSizeMB MB` |
