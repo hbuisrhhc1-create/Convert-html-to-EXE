@@ -246,7 +246,7 @@ jobs:
           & $signtool sign /v /f $certPath /p "$env:CERT_PASSWORD" /tr https://timestamp.digicert.com /td sha256 /fd SHA256 $exeToSign.FullName
           Remove-Item $certPath -Force -ErrorAction SilentlyContinue
 
-      # ==========================================
+     # ==========================================
       # מסלול ב': בניית אפליקציית Android (APK)
       # ==========================================
       - name: Setup Java SDK
@@ -298,12 +298,11 @@ jobs:
           
           Set-Content $configPath -Value $configContent -Encoding UTF8
 
-          Write-Host ">>> מקמפל APK..."
-          cordova build android --release
+          Write-Host ">>> מקמפל APK (מצב Debug)..."
+          cordova build android --debug
 
           New-Item -ItemType Directory -Force -Path "../build_output"
-          Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" | Copy-Item -Destination "../build_output/"
-
+          Get-ChildItem -Path "platforms/android/app/build/outputs/apk/debug" -Filter "*.apk" | Copy-Item -Destination "../build_output/"
       # ==========================================
       # סיום והעלאת קבצים
       # ==========================================
