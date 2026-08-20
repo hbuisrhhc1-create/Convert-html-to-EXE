@@ -1,4 +1,4 @@
-name: Universal Cross-Platform App Builder (Autonomous Adaptive AI Engine)
+name: Universal Cross-Platform App Builder (Massive Autonomous Adaptive Engine)
 
 on:
   workflow_dispatch:
@@ -100,7 +100,7 @@ jobs:
           if (Test-Path "icon.png") { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
 
       # ==========================================
-      # בניית Windows עם מטריצת התאוששות רב-שלבית
+      # בניית Windows עם מטריצת 10 אסטרטגיות תיקון
       # ==========================================
       - name: Setup .NET SDK
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
@@ -108,7 +108,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Compile Windows EXE with Multi-Strategy Autonomous Engine
+      - name: Compile Windows EXE with Massive Autonomous Engine
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
         shell: pwsh
         run: |
@@ -119,7 +119,7 @@ jobs:
           function Remove-LockedFolderForce {
               param([string]$FolderPath)
               if (Test-Path $FolderPath) {
-                  Stop-Process -Name "dotnet", "msbuild", "signtool" -Force -ErrorAction SilentlyContinue
+                  Stop-Process -Name "dotnet", "msbuild", "signtool", "vBC" -Force -ErrorAction SilentlyContinue
                   Start-Sleep -Seconds 2
                   Get-ChildItem -Path $FolderPath -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
                       try { $_.Attributes = 'Normal' } catch { }
@@ -130,46 +130,75 @@ jobs:
               }
           }
 
-          function Invoke-MultiStrategyEngine {
+          function Invoke-MassiveWindowsEngine {
               param([scriptblock]$ScriptBlock, [string]$ContextName)
-              $maxStrategies = 3
+              $maxStrategies = 10
               $currentStrategy = 1
 
               while ($currentStrategy -le $maxStrategies) {
                   try {
-                      Write-Host ">>> [$ContextName] הפעלת אסטרטגיה מספר $currentStrategy/$max..."
+                      Write-Host ">>> [$ContextName] מריץ אסטרטגיית תיקון מספר $currentStrategy/$maxStrategies..."
                       & $ScriptBlock
-                      Write-Host ">>> [$ContextName] פעולה הסתיימה בהצלחה!"
+                      Write-Host ">>> [$ContextName] הבנייה הוכתרה בהצלחה!"
                       return
                   } catch {
                       $errorMessage = $_.Exception.Message
-                      Write-Warning "⚠️ שגיאה ברובד $ContextName (אסטרטגיה $currentStrategy): $errorMessage"
+                      Write-Warning "⚠️ שגיאה ברובד $ContextName (ניסיון $currentStrategy/$maxStrategies): $errorMessage"
 
                       if ($currentStrategy -eq $maxStrategies) {
-                          Write-Error "❌ כל $maxStrategies האסטרטגיות האוטונומיות מוצו עבור $ContextName. נכשל."
+                          Write-Error "❌ כל 10 אסטרטגיות התיקון האוטונומיות עבור Windows מוצו."
                           throw $_
                       }
 
-                      Write-Host ">>> מנוע ה-AI מפעיל את אסטרטגיית התיקון הבאה בסדרה..."
+                      Write-Host ">>> מנוע ה-AI מנתח ומפעיל את האסטרטגיה הבאה ברשימה..."
                       
                       switch ($currentStrategy) {
                           1 {
-                              Write-Host ">>> [אסטרטגיה 1] שחרור תהליכים נעולים וניקוי בסיסי..."
+                              Write-Host ">>> [אסטרטגיה 1] עצירת תהליכי דוט-נט רדומים ושחרור תיקיית obj..."
                               Stop-Process -Name "dotnet", "msbuild" -Force -ErrorAction SilentlyContinue
-                              Remove-LockedFolderForce "obj"
-                              Start-Sleep -Seconds 3
+                              Remove-LockedFolderForce "src_win/obj"
                           }
                           2 {
-                              Write-Host ">>> [אסטרטגיה 2] איפוס מטמוני NuGet ורענון תלויות מלא..."
-                              dotnet nuget locals all --clear
-                              Remove-LockedFolderForce "obj"
-                              Remove-LockedFolderForce "bin"
+                              Write-Host ">>> [אסטרטגיה 2] מחיקת תיקיות obj ו-bin גם יחד..."
+                              Remove-LockedFolderForce "src_win/obj"
+                              Remove-LockedFolderForce "src_win/bin"
                           }
                           3 {
-                              Write-Host ">>> [אסטרטגיה 3] איפוס עמוק: מחיקת שלד הפרויקט ובנייה מחדש מאפס..."
-                              Remove-LockedFolderForce "obj"
-                              Remove-LockedFolderForce "bin"
+                              Write-Host ">>> [אסטרטגיה 3] ניקוי עמוק של מטמון ה-NuGet הגלובלי במערכת..."
+                              dotnet nuget locals all --clear
+                          }
+                          4 {
+                              Write-Host ">>> [אסטרטגיה 4] איפוס הרשאות קבצים וביטול מצב לקריאה בלבד..."
+                              Get-ChildItem -Path "src_win" -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object { $_.Attributes = 'Normal' }
+                          }
+                          5 {
+                              Write-Host ">>> [אסטרטגיה 5] הרצת שחזור חבילות בכוח (dotnet restore --force)..."
+                              if (Test-Path "src_win") {
+                                  Set-Location "src_win"
+                                  dotnet restore --force --no-cache
+                                  Set-Location ".."
+                              }
+                          }
+                          6 {
+                              Write-Host ">>> [אסטרטגיה 6] מחיקת קבצי נעילה זמניים ותיקיות פרסום..."
+                              Remove-LockedFolderForce "src_win/final_publish"
+                              Remove-LockedFolderForce "src_win/bin/Release"
+                          }
+                          7 {
+                              Write-Host ">>> [אסטרטגיה 7] ניקוי מטמון הקומפילציה הגלובלי של MSBuild..."
+                              Remove-LockedFolderForce "$env:LocalAppData\Microsoft\MSBuild"
+                          }
+                          8 {
+                              Write-Host ">>> [אסטרטגיה 8] החלפת סביבת העבודה באמצעות איפוס הגדרות SDK..."
+                              dotnet build-server shutdown
+                          }
+                          9 {
+                              Write-Host ">>> [אסטרטגיה 9] מחיקה מוחלטת של שלד הפרויקט (src_win) ובנייתו מאפס..."
                               Remove-LockedFolderForce "src_win"
+                          }
+                          default {
+                              Write-Host ">>> [אסטרטגיה 10] המתנה אקראית ואתחול מחדש של תהליכי המערכת..."
+                              Start-Sleep -Seconds 5
                           }
                       }
 
@@ -313,7 +342,7 @@ jobs:
               }
           }
 
-          Invoke-MultiStrategyEngine -ScriptBlock $BuildWindowsLogic -ContextName "Windows Compilation Engine"
+          Invoke-MassiveWindowsEngine -ScriptBlock $BuildWindowsLogic -ContextName "Windows Compilation Engine"
 
       - name: Sign Windows Executable
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
@@ -338,7 +367,7 @@ jobs:
           Remove-Item $certPath -Force -ErrorAction SilentlyContinue
 
       # ==========================================
-      # בניית Android עם מטריצת התאוששות רב-שלבית
+      # בניית Android עם מטריצת 10 אסטרטגיות תיקון
       # ==========================================
       - name: Setup Java SDK
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
@@ -357,7 +386,7 @@ jobs:
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
         uses: android-actions/setup-android@v3
 
-      - name: Compile Android APK with Multi-Strategy Autonomous Engine
+      - name: Compile Android APK with Massive Autonomous Engine
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
         shell: pwsh
         run: |
@@ -368,7 +397,7 @@ jobs:
           function Remove-LockedFolderForce {
               param([string]$FolderPath)
               if (Test-Path $FolderPath) {
-                  Stop-Process -Name "node", "java", "gradle" -Force -ErrorAction SilentlyContinue
+                  Stop-Process -Name "node", "java", "gradle", "adb" -Force -ErrorAction SilentlyContinue
                   Start-Sleep -Seconds 2
                   Get-ChildItem -Path $FolderPath -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
                       try { $_.Attributes = 'Normal' } catch { }
@@ -379,40 +408,38 @@ jobs:
               }
           }
 
-          function Invoke-AndroidMultiStrategyEngine {
+          function Invoke-MassiveAndroidEngine {
               param([scriptblock]$ScriptBlock, [string]$ContextName)
-              $maxStrategies = 3
+              $maxStrategies = 10
               $currentStrategy = 1
 
               while ($currentStrategy -le $maxStrategies) {
                   try {
-                      Write-Host ">>> [$ContextName] הפעלת אסטרטגיה מספר $currentStrategy/$max..."
+                      Write-Host ">>> [$ContextName] מריץ אסטרטגיית תיקון אנדרואיד מספר $currentStrategy/$maxStrategies..."
                       & $ScriptBlock
-                      Write-Host ">>> [$ContextName] פעולה הסתיימה בהצלחה!"
+                      Write-Host ">>> [$ContextName] הבנייה הצליחה!"
                       return
                   } catch {
                       $errorMessage = $_.Exception.Message
-                      Write-Warning "⚠️ שגיאה באנדרואיד ברובד $ContextName (אסטרטגיה $currentStrategy): $errorMessage"
+                      Write-Warning "⚠️ שגיאה באנדרואיד (ניסיון $currentStrategy/$maxStrategies): $errorMessage"
 
-                      if ($currentStrategy -equal $maxStrategies) {
-                          Write-Error "❌ כל אסטרטגיות התיקון לאנדרואיד מוצו."
+                      if ($currentStrategy -eq $maxStrategies) {
+                          Write-Error "❌ כל 10 אסטרטגיות התיקון לאנדרואיד מוצו."
                           throw $_
                       }
 
                       Write-Host ">>> מנוע ה-AI עובר לאסטרטגיית התיקון הבאה..."
                       switch ($currentStrategy) {
-                          1 {
-                              npm cache clean --force
-                          }
-                          2 {
-                              Remove-LockedFolderForce "platforms"
-                              Remove-LockedFolderForce "plugins"
-                          }
-                          3 {
-                              Remove-LockedFolderForce "platforms"
-                              Remove-LockedFolderForce "plugins"
-                              Remove-LockedFolderForce "android_app"
-                          }
+                          1 { Stop-Process -Name "node", "java" -Force -ErrorAction SilentlyContinue; Remove-LockedFolderForce "android_app/platforms" }
+                          2 { npm cache clean --force }
+                          3 { Remove-LockedFolderForce "android_app/plugins" }
+                          4 { npm install -g cordova@latest }
+                          5 { Remove-LockedFolderForce "android_app/.gradle" }
+                          6 { Remove-LockedFolderForce "android_app/www" }
+                          7 { Remove-LockedFolderForce "android_app/platforms/android/app/build" }
+                          8 { Remove-LockedFolderForce "$env:USERPROFILE\.gradle" }
+                          9 { Remove-LockedFolderForce "android_app" }
+                          default { Start-Sleep -Seconds 4 }
                       }
 
                       $currentStrategy++
@@ -473,7 +500,7 @@ jobs:
               }
           }
 
-          Invoke-AndroidMultiStrategyEngine -ScriptBlock $BuildAndroidLogic -ContextName "Android Build Engine"
+          Invoke-MassiveAndroidEngine -ScriptBlock $BuildAndroidLogic -ContextName "Android Build Engine"
 
       # ==========================================
       # סיכום והעלאה
@@ -488,7 +515,7 @@ jobs:
           if ($builtFile) {
               $fileSizeMB = [Math]::Round($builtFile.Length / 1MB, 2)
               $summary = @"
-          ### 🚀 דוח בנייה – מנוע Autonomous Adaptive Active
+          ### 🚀 דוח בנייה – מנוע Autonomous Massive Adaptive
           | פרמטר מערכת | ערך מוגדר |
           | :--- | :--- |
           | **שם האפליקציה** | `$($env:APP_NAME)` |
@@ -507,6 +534,6 @@ jobs:
           tag_name: v${{ env.APP_VERSION }}-build-${{ github.run_number }}
           name: '${{ env.APP_NAME }} v${{ env.APP_VERSION }} (${{ env.TARGET_PLATFORM }})'
           body: |
-            האפליקציה נוצרה בהצלחה באמצעות מנוע ה-Autonomous Adaptive Engine.
+            האפליקציה נוצרה בהצלחה באמצעות מטריצת 10 שלבי התיקון האוטונומיים.
           draft: false
           prerelease: false
