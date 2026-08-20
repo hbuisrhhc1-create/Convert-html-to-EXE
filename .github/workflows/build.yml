@@ -223,76 +223,76 @@ jobs:
               $isUrl = $env:IS_URL
 
               $formCode = @"
-              using System;
-              using System.IO;
-              using System.Windows.Forms;
-              using System.Diagnostics;
-              using Microsoft.Web.WebView2.Core;
+using System;
+using System.IO;
+using System.Windows.Forms;
+using System.Diagnostics;
+using Microsoft.Web.WebView2.Core;
 
-              namespace UniversalAppProject
-              {
-                  static class Program
-                  {
-                      [STAThread]
-                      static void Main()
-                      {
-                          Application.EnableVisualStyles();
-                          Application.SetCompatibleTextRenderingDefault(false);
-                          Application.Run(new MainForm());
-                      }
-                  }
+namespace UniversalAppProject
+{
+    static class Program
+    {
+        [STAThread]
+        static void Main()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new MainForm());
+        }
+    }
 
-                  public partial class MainForm : Form
-                  {
-                      private Microsoft.Web.WebView2.WinForms.WebView2? webView;
+    public partial class MainForm : Form
+    {
+        private Microsoft.Web.WebView2.WinForms.WebView2? webView;
 
-                      public MainForm()
-                      {
-                          this.Text = `"$safeAppName`";
-                          this.Width = 1024;
-                          this.Height = 768;
-                          this.StartPosition = FormStartPosition.CenterScreen;
-                          try
-                          {
-                              string? exePath = Process.GetCurrentProcess().MainModule?.FileName;
-                              if (!string.IsNullOrEmpty(exePath))
-                              {
-                                  this.Icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
-                              }
-                          }
-                          catch { }
-                          LoadWebView();
-                      }
+        public MainForm()
+        {
+            this.Text = `"$safeAppName`";
+            this.Width = 1024;
+            this.Height = 768;
+            this.StartPosition = FormStartPosition.CenterScreen;
+            try
+            {
+                string? exePath = Process.GetCurrentProcess().MainModule?.FileName;
+                if (!string.IsNullOrEmpty(exePath))
+                {
+                    this.Icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
+                }
+            }
+            catch { }
+            LoadWebView();
+        }
 
-                      private async void LoadWebView()
-                      {
-                          webView = new Microsoft.Web.WebView2.WinForms.WebView2();
-                          webView.Dock = DockStyle.Fill;
-                          this.Controls.Add(webView);
-                          try
-                          {
-                              string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), `"$safeAppName`");
-                              var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-                              await webView.EnsureCoreWebView2Async(env);
-                              string target = `"$safeSource`";
-                              bool isUrl = System.Convert.ToBoolean(`"$isUrl`".ToLower());
-                              if (isUrl) {
-                                  webView.CoreWebView2.Navigate(target);
-                              } else {
-                                  string exeDir = AppDomain.CurrentDomain.BaseDirectory;
-                                  webView.CoreWebView2.SetVirtualHostNameToFolderMapping("app.local", exeDir, CoreWebView2HostResourceAccessKind.Allow);
-                                  string urlPath = target.Replace("\\", "/");
-                                  webView.CoreWebView2.Navigate(`"https://app.local/{urlPath}`");
-                              }
-                          }
-                          catch (Exception ex)
-                          {
-                              MessageBox.Show("שגיאה בטעינת האפליקציה: " + ex.Message, "שגיאה", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                          }
-                      }
-                  }
-              }
-              "@
+        private async void LoadWebView()
+        {
+            webView = new Microsoft.Web.WebView2.WinForms.WebView2();
+            webView.Dock = DockStyle.Fill;
+            this.Controls.Add(webView);
+            try
+            {
+                string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), `"$safeAppName`");
+                var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                await webView.EnsureCoreWebView2Async(env);
+                string target = `"$safeSource`";
+                bool isUrl = System.Convert.ToBoolean(`"$isUrl`".ToLower());
+                if (isUrl) {
+                    webView.CoreWebView2.Navigate(target);
+                } else {
+                    string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+                    webView.CoreWebView2.SetVirtualHostNameToFolderMapping("app.local", exeDir, CoreWebView2HostResourceAccessKind.Allow);
+                    string urlPath = target.Replace("\\", "/");
+                    webView.CoreWebView2.Navigate(`"https://app.local/{urlPath}`");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("שגיאה בטעינת האפליקציה: " + ex.Message, "שגיאה", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+    }
+}
+"@
               Set-Content -Path "Program.cs" -Value $formCode -Encoding UTF8
 
               Write-Host ">>> מריץ תהליך קומפילציה מלא (Publish)..."
