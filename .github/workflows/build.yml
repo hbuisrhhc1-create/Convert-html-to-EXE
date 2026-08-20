@@ -194,25 +194,33 @@ jobs:
               $appName = $env:APP_NAME
 
               [xml]$xml = Get-Content $csprojPath
-              $xml.Project.PropertyGroup[0].OutputType = "WinExe"
-              $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Version")) | Out-Null
-              $xml.Project.PropertyGroup[0].Version = $appVersion
-              $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("AssemblyVersion")) | Out-Null
-              $xml.Project.PropertyGroup[0].AssemblyVersion = $appVersion
-              $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("FileVersion")) | Out-Null
-              $xml.Project.PropertyGroup[0].FileVersion = $appVersion
-              $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Product")) | Out-Null
-              $xml.Project.PropertyGroup[0].Product = $appName
-              $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Company")) | Out-Null
-              $xml.Project.PropertyGroup[0].Company = "ינון דרייב"
+              $pg = $xml.Project.PropertyGroup[0]
+
+              function Set-XmlProperty {
+                  param($Parent, $TagName, $Value)
+                  $node = $Parent.$TagName
+                  if ($node) {
+                      $Parent.$TagName = $Value
+                  } else {
+                      $elem = $xml.CreateElement($TagName)
+                      $elem.InnerText = $Value
+                      $Parent.AppendChild($elem) | Out-Null
+                  }
+              }
+
+              Set-XmlProperty -Parent $pg -TagName "OutputType" -Value "WinExe"
+              Set-XmlProperty -Parent $pg -TagName "Version" -Value $appVersion
+              Set-XmlProperty -Parent $pg -TagName "AssemblyVersion" -Value $appVersion
+              Set-XmlProperty -Parent $pg -TagName "FileVersion" -Value $appVersion
+              Set-XmlProperty -Parent $pg -TagName "Product" -Value $appName
+              Set-XmlProperty -Parent $pg -TagName "Company" -Value "ינון דרייב"
 
               if ($env:ICON_AVAILABLE == 'true' -and (Test-Path "$workspaceRoot/icon.png")) {
                   Copy-Item "$workspaceRoot/icon.png" "icon.png" -Force
                   try {
                       magick icon.png -resize 256x256! -define icon:auto-resize=256,128,64,48,32,16 icon.ico
                       if (Test-Path "icon.ico") {
-                          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("ApplicationIcon")) | Out-Null
-                          $xml.Project.PropertyGroup[0].ApplicationIcon = "icon.ico"
+                          Set-XmlProperty -Parent $pg -TagName "ApplicationIcon" -Value "icon.ico"
                       }
                   } catch { }
               }
@@ -222,7 +230,6 @@ jobs:
               $safeSource = $env:FINAL_SOURCE -replace '"', '\"' -replace '\\', '\\\\'
               $isUrl = $env:IS_URL
 
-              # יצירת קובץ C# באמצעות מערך שורות נקי (מונע לחלוטין שגיאות ParserError ורווחים נסתרים)
               $formCodeLines = @(
                   "using System;",
                   "using System.IO;",
