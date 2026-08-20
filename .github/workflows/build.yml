@@ -137,16 +137,16 @@ jobs:
 
               while ($attempt -le $maxRetries) {
                   try {
-                      Write-Host ">>> מריץ פעולה (${ContextName}) - ניסיון $attempt/$maxRetries..."
+                      Write-Host ">>> מריץ פעולה ($($ContextName)) - ניסיון $attempt/$maxRetries..."
                       & $ScriptBlock
                       Write-Host ">>> פעולה הצליחה!"
                       return
                   } catch {
                       $errorMessage = $_.Exception.Message
-                      Write-Warning "⚠️ זוהתה שגיאה ברובד ${ContextName}: $errorMessage"
+                      Write-Warning "⚠️ זוהתה שגיאה ברובד $($ContextName): $errorMessage"
 
                       if ($attempt -eq $maxRetries) {
-                          Write-Error "❌ כל ניסיונות ההתאוששות האוטונומית כשלו עבור ${ContextName}."
+                          Write-Error "❌ כל ניסיונות ההתאוששות האוטונומית כשלו עבור $($ContextName)."
                           throw $_
                       }
 
@@ -378,13 +378,13 @@ jobs:
 
               while ($attempt -le $maxRetries) {
                   try {
-                      Write-Host ">>> מריץ פעולה לאנדרואיד (${ContextName}) - ניסיון $attempt/$maxRetries..."
+                      Write-Host ">>> מריץ פעולה לאנדרואיד ($($ContextName)) - ניסיון $attempt/$maxRetries..."
                       & $ScriptBlock
                       Write-Host ">>> פעולה הצליחה!"
                       return
                   } catch {
                       $errorMessage = $_.Exception.Message
-                      Write-Warning "⚠️ שגיאה באנדרואיד ברובד ${ContextName}: $errorMessage"
+                      Write-Warning "⚠️ שגיאה באנדרואיד ברובד $($ContextName): $errorMessage"
 
                       if ($attempt -eq $maxRetries) {
                           Write-Error "❌ ניסיונות התיקון לאנדרואיד מוצו."
