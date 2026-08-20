@@ -91,12 +91,17 @@ jobs:
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host ">>> יוצר פרויקט C# WinForms בתיקייה נפרדת..."
-          New-Item -ItemType Directory -Force -Path "src_win"
+          Write-Host ">>> מוודא קיומה של תיקיית הפרויקט..."
+          if (-not (Test-Path "src_win")) {
+              New-Item -ItemType Directory -Force -Path "src_win"
+          }
           Set-Location "src_win"
 
-          dotnet new winforms -n UniversalAppProject
-          dotnet add package Microsoft.Web.WebView2
+          if (-not (Test-Path "UniversalAppProject.csproj")) {
+              Write-Host ">>> יוצר פרויקט C# WinForms חדש..."
+              dotnet new winforms -n UniversalAppProject
+              dotnet add package Microsoft.Web.WebView2
+          }
 
           $appVersion = "${{ github.event.inputs.app_version }}"
           $appName = "${{ github.event.inputs.app_name }}"
