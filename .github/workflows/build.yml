@@ -1,146 +1,111 @@
-name: Universal Dynamic App Builder & Signer
+name: Universal Cross-Platform App Builder (Pro)
 
 on:
   workflow_dispatch:
     inputs:
+      target_platform:
+        description: 'בחר פלטפורמה ליצירה'
+        required: true
+        default: 'windows'
+        type: choice
+        options:
+          - windows
+          - android
       website_url:
-        description: 'אופציה 1: כתובת אתר מלאה (למשל https://example.com) - השאר ריק כדי להשתמש בקובץ מקומי'
+        description: 'כתובת אתר מלאה (למשל https://example.com) - השאר ריק אם משתמש בקובץ מקומי'
         required: false
         default: ''
         type: string
       local_html_file:
-        description: 'אופציה 2: קובץ HTML מקומי (רלוונטי אם כתובת האתר ריקה)'
+        description: 'קובץ HTML מקומי ראשי (רלוונטי רק אם כתובת האתר ריקה)'
         required: false
-        default: '.html'
+        default: 'index.html'
         type: string
       app_name:
-        description: 'שם התוכנה'
+        description: 'שם התוכנה / אפליקציה'
         required: true
-        default: ''
+        default: 'MyCoolApp'
         type: string
       app_version:
         description: 'גרסת התוכנה (למשל 1.0.0)'
         required: true
         default: '1.0.0'
         type: string
-      include_assets:
-        description: 'האם לארוז ב-ZIP במידה ויש קבצים מרובים'
-        required: true
-        default: false
-        type: boolean
 
 jobs:
-  build-universal:
+  build:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Setup Node.js
+      - name: Setup Node.js (with caching)
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
+          cache: 'npm'
 
-      - name: Pre-flight & Validate Assets
+      - name: Pre-flight & Icon Fetching
         shell: pwsh
-        id: config
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          
           $url = "${{ github.event.inputs.website_url }}".Trim()
           $local = "${{ github.event.inputs.local_html_file }}".Trim()
           
           if (-not [string]::IsNullOrWhiteSpace($url)) {
-            $source = $url
-            Write-Host ">>> מצב נבחר: כתובת אתר אינטרנט ($source)"
+            Write-Host ">>> מקור נבחר: כתובת אינטרנט -> $url"
+            echo "FINAL_SOURCE=$url" >> $env:GITHUB_ENV
+            echo "IS_URL=true" >> $env:GITHUB_ENV
           } else {
-            $source = $local
-            Write-Host ">>> מצב נבחר: קובץ מקומי ($source)"
-            if (-not (Test-Path $source)) {
-              Write-Error "שגיאה קריטית: הקובץ המקומי '$source' לא נמצא בפרויקט!"
+            Write-Host ">>> מקור נבחר: קובץ מקומי -> $local"
+            if (-not (Test-Path $local)) {
+              Write-Error "שגיאה: הקובץ המקומי '$local' לא נמצא בפרויקט!"
               exit 1
             }
+            echo "FINAL_SOURCE=$local" >> $env:GITHUB_ENV
+            echo "IS_URL=false" >> $env:GITHUB_ENV
           }
-          
-          echo "FINAL_SOURCE=$source" >> $env:GITHUB_ENV
 
-          # 1. בדיקת קיומם של קובצי תמונה מקומיים ב-Repository
-          $iconSource = $null
-          if (Test-Path "favicon.png") { $iconSource = "favicon.png" }
-          elseif (Test-Path "icon.png") { $iconSource = "icon.png" }
-
-          # 2. חילוץ חכם של אייקון מהאתר
-          if (-not $iconSource -and -not (Test-Path "favicon.ico") -and (-not [string]::IsNullOrWhiteSpace($url))) {
-            try {
-              Write-Host ">>> מנסה לחלץ תגית favicon מתוך קוד ה-HTML של האתר..."
-              $resp = Invoke-WebRequest -Uri $url -UserAgent "Mozilla/5.0" -UseBasicParsing
-              $html = $resp.Content
-              
-              $regex = '<link\s+[^>]*rel=["''](?:shortcut\s+)?(?:apple-touch-)?icon["''][^>]*href=["'']([^"'']+)["'']'
-              $match = [regex]::Match($html, $regex, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-              if (-not $match.Success) {
-                $regexReverse = '<link\s+[^>]*href=["'']([^"'']+)["''][^>]*rel=["''](?:shortcut\s+)?(?:apple-touch-)?icon["'']'
-                $match = [regex]::Match($html, $regexReverse, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-              }
-
-              if ($match.Success) {
-                $rawPath = $match.Groups[1].Value
-                $baseUri = [System.Uri]$url
-                $iconUrl = [System.Uri]::new($baseUri, $rawPath).AbsoluteUri
-                Write-Host ">>> מוריד אייקון שנמצא ב-HTML: $iconUrl"
-                Invoke-WebRequest -Uri $iconUrl -OutFile "remote_favicon.png" -UserAgent "Mozilla/5.0"
-                if (Test-Path "remote_favicon.png") { $iconSource = "remote_favicon.png" }
-              }
-            } catch {
-              Write-Host ">>> חילוץ מתגיות ה-HTML נכשל, עובר לשירות האייקונים..."
-            }
-
-            if (-not $iconSource) {
+          # מערכת חילוץ אייקונים חכמה
+          $iconFound = $false
+          if (Test-Path "icon.png") { 
+              $iconFound = $true 
+          } elseif (-not [string]::IsNullOrWhiteSpace($url)) {
               try {
-                $domain = ([System.Uri]$url).Host
-                $faviconApi = "https://www.google.com/s2/favicons?domain=$domain&sz=128"
-                Write-Host ">>> מוריד אייקון ברזולוציה גבוהה עבור הדומיין: $domain"
-                Invoke-WebRequest -Uri $faviconApi -OutFile "remote_favicon.png" -UserAgent "Mozilla/5.0"
-                if (Test-Path "remote_favicon.png") { $iconSource = "remote_favicon.png" }
+                  $domain = ([System.Uri]$url).Host
+                  $faviconApi = "https://www.google.com/s2/favicons?domain=$domain&sz=128"
+                  Write-Host ">>> מוריד אייקון עבור הדומיין: $domain"
+                  Invoke-WebRequest -Uri $faviconApi -OutFile "icon.png" -UserAgent "Mozilla/5.0"
+                  if (Test-Path "icon.png") { $iconFound = $true }
               } catch {
-                Write-Host ">>> לא ניתן היה להוריד אייקון מהאתר."
+                  Write-Host ">>> לא ניתן היה להוריד אייקון חיצוני."
               }
-            }
           }
+          if ($iconFound) { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
 
-          # 3. המרת קובץ התמונה ל-icon.ico
-          if (Test-Path "favicon.ico") {
-            Copy-Item "favicon.ico" "icon.ico" -Force
-          } elseif ($iconSource) {
-            Write-Host ">>> ממיר את הקובץ '$iconSource' ל-icon.ico..."
-            cmd.exe /c "npx --yes png-to-ico $iconSource > icon.ico"
-          }
+      # ==========================================
+      # מסלול א': בניית תוכנת Windows (EXE) + חתימה
+      # ==========================================
+      - name: Setup .NET SDK
+        if: ${{ github.event.inputs.target_platform == 'windows' }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-      - name: Compile Standalone GUI WebView2 EXE
+      - name: Compile Windows EXE
+        if: ${{ github.event.inputs.target_platform == 'windows' }}
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host ">>> יוצר פרויקט C#..."
-
+          Write-Host ">>> יוצר פרויקט C# WinForms..."
           dotnet new winforms -n UniversalAppProject -o . --force
           dotnet add package Microsoft.Web.WebView2
 
           $appVersion = "${{ github.event.inputs.app_version }}"
           $appName = "${{ github.event.inputs.app_name }}"
-
           $csproj = Get-Content UniversalAppProject.csproj -Raw
+          $csproj = $csproj -replace '<OutputType>Exe</OutputType>', '<OutputType>WinExe</OutputType>'
           
-          if ($csproj -match '<OutputType>Exe</OutputType>') {
-              $csproj = $csproj -replace '<OutputType>Exe</OutputType>', '<OutputType>WinExe</OutputType>'
-          } else {
-              $csproj = $csproj -replace '</PropertyGroup>', "<OutputType>WinExe</OutputType>`n  </PropertyGroup>"
-          }
-
           $versionProps = @"
             <Version>$appVersion</Version>
             <AssemblyVersion>$appVersion</AssemblyVersion>
@@ -148,27 +113,27 @@ jobs:
             <Product>$appName</Product>
             <Company>ינון דרייב</Company>
           "@
-          
           $csproj = $csproj -replace '</PropertyGroup>', "$versionProps`n  </PropertyGroup>"
           
-          if (Test-Path "icon.ico") {
-            Write-Host ">>> מטמיע את icon.ico בתוך ה-csproj..."
-            $csproj = $csproj -replace '</PropertyGroup>', "<ApplicationIcon>icon.ico</ApplicationIcon>`n  </PropertyGroup>"
+          if ($env:ICON_AVAILABLE -eq 'true') {
+              Write-Host ">>> ממיר תמונה לאייקון .ico..."
+              cmd.exe /c "npx --yes png-to-ico icon.png > icon.ico"
+              if (Test-Path "icon.ico") {
+                  $csproj = $csproj -replace '</PropertyGroup>', "<ApplicationIcon>icon.ico</ApplicationIcon>`n  </PropertyGroup>"
+              }
           }
+          
           Set-Content UniversalAppProject.csproj -Value $csproj -Encoding UTF8
 
-          $source = $env:FINAL_SOURCE
-
-          # טיפול בתווים מיוחדים לפני ההזרקה ל-C#
           $safeAppName = $appName -replace '"', '\"'
-          $safeSource = $source -replace '"', '\"' -replace '\\', '\\\\'
+          $safeSource = $env:FINAL_SOURCE -replace '"', '\"' -replace '\\', '\\\\'
+          $isUrl = $env:IS_URL
 
           $formCode = @"
           using System;
           using System.IO;
           using System.Windows.Forms;
           using System.Diagnostics;
-          using System.Net.Http;
           using Microsoft.Web.WebView2.Core;
 
           namespace UniversalAppProject
@@ -205,72 +170,7 @@ jobs:
                       }
                       catch { }
 
-                      if (!IsWebView2RuntimeInstalled())
-                      {
-                          DialogResult dialogResult = MessageBox.Show(
-                              "רכיב המערכת WebView2 לא מותקן.\nהאם תרצה שהמערכת תוריד ותתקין אותו כעת באופן אוטומטי?", 
-                              "התקנת רכיבים חסרים", 
-                              MessageBoxButtons.YesNo, 
-                              MessageBoxIcon.Information);
-                              
-                          if (dialogResult == DialogResult.Yes)
-                          {
-                              InstallWebView2Runtime();
-                          }
-                          else
-                          {
-                              MessageBox.Show("לא ניתן להפעיל את התוכנה ללא רכיב זה.", "שגיאה", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                              Environment.Exit(0);
-                          }
-                      }
-                      else
-                      {
-                          LoadWebView();
-                      }
-                  }
-
-                  private bool IsWebView2RuntimeInstalled()
-                  {
-                      try
-                      {
-                          string? version = CoreWebView2Environment.GetAvailableBrowserVersionString();
-                          return !string.IsNullOrWhiteSpace(version);
-                      }
-                      catch (Exception)
-                      {
-                          return false;
-                      }
-                  }
-
-                  private void InstallWebView2Runtime()
-                  {
-                      try
-                      {
-                          string installerPath = Path.Combine(Path.GetTempPath(), "MicrosoftEdgeWebview2Setup.exe");
-                          using (HttpClient client = new HttpClient())
-                          {
-                              byte[] fileBytes = client.GetByteArrayAsync("https://go.microsoft.com/fwlink/p/?LinkId=2124703").GetAwaiter().GetResult();
-                              File.WriteAllBytes(installerPath, fileBytes);
-                          }
-                          
-                          Process? process = Process.Start(installerPath);
-                          process?.WaitForExit();
-                          
-                          if (IsWebView2RuntimeInstalled())
-                          {
-                              LoadWebView();
-                          }
-                          else
-                          {
-                              MessageBox.Show("ההתקנה נכשלה או בוטלה.", "שגיאה", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                              Environment.Exit(0);
-                          }
-                      }
-                      catch (Exception ex)
-                      {
-                          MessageBox.Show("שגיאה במהלך ניסיון ההתקנה: " + ex.Message, "שגיאה", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                          Environment.Exit(0);
-                      }
+                      LoadWebView();
                   }
 
                   private async void LoadWebView()
@@ -283,22 +183,16 @@ jobs:
                       {
                           await webView.EnsureCoreWebView2Async(null);
                           string target = `"$safeSource`";
+                          bool isUrl = $isUrl;
 
-                          // אם מדובר בכתובת אינטרנט חיצונית
-                          if (Uri.IsWellFormedUriString(target, UriKind.Absolute) && target.StartsWith("http", StringComparison.OrdinalIgnoreCase)) 
+                          if (isUrl) 
                           {
                               webView.CoreWebView2.Navigate(target);
                           } 
-                          // אם מדובר בקובץ מקומי (HTML)
                           else 
                           {
-                              string? exePath = Process.GetCurrentProcess().MainModule?.FileName;
-                              string exeDir = !string.IsNullOrEmpty(exePath) ? (Path.GetDirectoryName(exePath) ?? AppDomain.CurrentDomain.BaseDirectory) : AppDomain.CurrentDomain.BaseDirectory;
-                              
-                              // יצירת דומיין וירטואלי כדי למנוע בעיות CORS של קבצים מקומיים
+                              string exeDir = AppDomain.CurrentDomain.BaseDirectory;
                               webView.CoreWebView2.SetVirtualHostNameToFolderMapping("app.local", exeDir, CoreWebView2HostResourceAccessKind.Allow);
-                              
-                              // ניווט דרך הדומיין הוירטואלי
                               string urlPath = target.Replace("\\", "/");
                               webView.CoreWebView2.Navigate($"https://app.local/{urlPath}");
                           }
@@ -311,92 +205,102 @@ jobs:
               }
           }
           "@
-
           Set-Content -Path "Program.cs" -Value $formCode -Encoding UTF8
 
-          Write-Host ">>> מבצע Publish ל-EXE עצמאי..."
           dotnet publish -c Release -r win-x64 -p:OutputType=WinExe -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
-
           New-Item -ItemType Directory -Force -Path "build_output"
+          Get-ChildItem -Path "./final_publish" -Filter "*.exe" | Copy-Item -Destination "build_output/"
 
-          $compiledExe = Get-ChildItem -Path "./final_publish" -Filter "*.exe" -File | Select-Object -First 1
-          if ($compiledExe) {
-              Copy-Item $compiledExe.FullName "build_output/"
-              Write-Host ">>> הקובץ הועתק בהצלחה ל-build_output."
-          } else {
-              Write-Error "שגיאה: קובץ ה-EXE לא נוצר."
-              exit 1
-          }
-
-      - name: Sign Executable with Persistent Certificate
+      - name: Sign Windows Executable
+        if: ${{ github.event.inputs.target_platform == 'windows' && env.CERTIFICATE_BASE64 != '' }}
         shell: pwsh
         env:
           CERT_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
           CERT_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host ">>> מפענח ומשתמש בתעודה הקבועה לחתימה..."
-          
+          if ([string]::IsNullOrWhiteSpace($env:CERT_BASE64)) {
+              Write-Host ">>> לא נמצאה תעודת חתימה, מדלג..."
+              exit 0
+          }
+          Write-Host ">>> חותם על ה-EXE..."
           $certBytes = [System.Convert]::FromBase64String($env:CERT_BASE64)
           $certPath = "$env:TEMP\temp_cert.pfx"
           [System.IO.File]::WriteAllBytes($certPath, $certBytes)
-          
           $signtool = (Get-ChildItem "C:\Program Files*\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -First 1).FullName
+          $exeToSign = Get-ChildItem -Path "build_output" -Filter "*.exe" -File | Select-Object -First 1
+          & $signtool sign /v /f $certPath /p "$env:CERT_PASSWORD" /tr http://timestamp.digicert.com /td sha256 /fd SHA256 $exeToSign.FullName
+
+      - name: Cleanup Windows Certificate
+        if: ${{ always() && github.event.inputs.target_platform == 'windows' }}
+        shell: pwsh
+        run: Remove-Item "$env:TEMP\temp_cert.pfx" -Force -ErrorAction SilentlyContinue
+
+      # ==========================================
+      # מסלול ב': בניית אפליקציית Android (APK)
+      # ==========================================
+      - name: Setup Java SDK (with Gradle cache)
+        if: ${{ github.event.inputs.target_platform == 'android' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        if: ${{ github.event.inputs.target_platform == 'android' }}
+        uses: android-actions/setup-android@v3
+
+      - name: Compile Android APK
+        if: ${{ github.event.inputs.target_platform == 'android' }}
+        shell: pwsh
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host ">>> מתקין Cordova..."
+          npm install -g cordova
+
+          Write-Host ">>> יוצר פרויקט אנדרואיד..."
+          cordova create android_app com.yinon.app "${{ github.event.inputs.app_name }}"
           
-          if ($signtool) {
-              Write-Host ">>> מחפש את הקובץ לחתימה..."
-              $exeToSign = Get-ChildItem -Path "build_output" -Filter "*.exe" -File | Select-Object -First 1
-              
-              if ($exeToSign) {
-                  Write-Host ">>> חותם על הקובץ: $($exeToSign.Name)..."
-                  
-                  # הרצת signtool עם פירוט ושרת חותמת זמן
-                  & $signtool sign /v /f $certPath /p "$env:CERT_PASSWORD" /tr http://timestamp.digicert.com /td sha256 /fd SHA256 $exeToSign.FullName
-                  
-                  # בדיקה אמיתית האם החתימה הצליחה
-                  if ($LASTEXITCODE -ne 0) {
-                      Write-Error "שגיאה קריטית: signtool נכשל עם קוד יציאה $LASTEXITCODE."
-                      exit 1
-                  }
-                  
-                  Write-Host ">>> קובץ ה-EXE נחתם בהצלחה!"
-              } else {
-                  Write-Error "שגיאה: קובץ ה-EXE לא נמצא בתיקיית build_output לצורך חתימה."
-                  exit 1
-              }
+          if ($env:ICON_AVAILABLE -eq 'true') {
+              Copy-Item "icon.png" "android_app/icon.png" -Force
+          }
+
+          Set-Location android_app
+          cordova platform add android
+
+          $source = $env:FINAL_SOURCE
+          $isUrl = $env:IS_URL
+          $configPath = "config.xml"
+          $configContent = Get-Content $configPath -Raw
+
+          if ($env:ICON_AVAILABLE -eq 'true') {
+              $configContent = $configContent -replace '</widget>', "<icon src=`"icon.png`" />`n</widget>"
+          }
+
+          if ($isUrl -eq 'true') {
+            Write-Host ">>> הגדרת URL באפליקציה: $source"
+            $configContent = $configContent -replace '<content src="index.html" />', "<content src=`"$source`" />"
+            $configContent = $configContent -replace '</widget>', "<access origin=`"*`" />`n<allow-navigation href=`"*`" />`n</widget>"
           } else {
-              Write-Error "שגיאה: signtool.exe לא נמצא."
-              exit 1
+            Write-Host ">>> מעתיק קבצים מקומיים ל-Assets..."
+            Get-ChildItem -Path .. -Exclude "android_app", "icon.png", ".git", ".github" | Copy-Item -Destination "www" -Recurse -Force
           }
+          
+          Set-Content $configPath -Value $configContent -Encoding UTF8
 
-      - name: Cleanup Certificate
-        if: always()
-        shell: pwsh
-        run: |
-          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          $certPath = "$env:TEMP\temp_cert.pfx"
-          if (Test-Path $certPath) {
-              Remove-Item $certPath -Force -ErrorAction SilentlyContinue
-              Write-Host ">>> תעודת החתימה נמחקה מתיקיית הזמניים בהצלחה."
-          }
+          Write-Host ">>> מקמפל APK..."
+          cordova build android --release
 
-      - name: Packaging
-        shell: pwsh
-        run: |
-          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          $includeAssets = "${{ github.event.inputs.include_assets }}"
-          $fileCount = (Get-ChildItem -Path "build_output" -File).Count
+          New-Item -ItemType Directory -Force -Path "../build_output"
+          Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" | Copy-Item -Destination "../build_output/"
 
-          if ($includeAssets -eq "true" -or $fileCount -gt 1) {
-            Compress-Archive -Path "build_output/*" -DestinationPath "${{ github.event.inputs.app_name }}.zip" -Force
-            Remove-Item "build_output" -Recurse -Force
-            New-Item -ItemType Directory -Force -Path "build_output"
-            Move-Item "${{ github.event.inputs.app_name }}.zip" "build_output/"
-          }
-
+      # ==========================================
+      # סיום והעלאת קבצים
+      # ==========================================
       - name: Artifact Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.app_name }}-Output
+          name: ${{ github.event.inputs.app_name }}-${{ github.event.inputs.target_platform }}-Build
           path: build_output/
           retention-days: 7
