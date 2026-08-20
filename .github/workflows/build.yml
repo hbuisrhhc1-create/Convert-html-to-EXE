@@ -249,7 +249,7 @@ jobs:
      # ==========================================
       # מסלול ב': בניית אפליקציית Android (APK)
       # ==========================================
-     - name: Compile and Sign Android APK
+      - name: Compile and Sign Android APK
         if: ${{ github.event.inputs.target_platform == 'android' }}
         shell: pwsh
         env:
@@ -325,3 +325,4 @@ jobs:
           name: ${{ github.event.inputs.app_name }}-${{ github.event.inputs.target_platform }}-Build
           path: build_output/
           retention-days: 7
+          # עדכון אחרון: 2026
