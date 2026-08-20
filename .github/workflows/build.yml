@@ -130,7 +130,6 @@ jobs:
               }
           }
 
-          # מעטפת אבטחה המנתחת שגיאות בזמן אמת ומפעילה פתרון מותאם אישית
           function Invoke-AutonomousEngine {
               param([scriptblock]$ScriptBlock, [string]$ContextName)
               $maxRetries = 3
@@ -138,22 +137,21 @@ jobs:
 
               while ($attempt -le $maxRetries) {
                   try {
-                      Write-Host ">>> מריץ פעולה ($ContextName) - ניסיון $attempt/$maxRetries..."
+                      Write-Host ">>> מריץ פעולה (${ContextName}) - ניסיון $attempt/$maxRetries..."
                       & $ScriptBlock
                       Write-Host ">>> פעולה הצליחה!"
                       return
                   } catch {
                       $errorMessage = $_.Exception.Message
-                      Write-Warning "⚠️ זוהתה שגיאה ברובד $ContextName: $errorMessage"
+                      Write-Warning "⚠️ זוהתה שגיאה ברובד ${ContextName}: $errorMessage"
 
                       if ($attempt -eq $maxRetries) {
-                          Write-Error "❌ כל ניסיונות ההתאוששות האוטונומית כשלו עבור $ContextName."
+                          Write-Error "❌ כל ניסיונות ההתאוששות האוטונומית כשלו עבור ${ContextName}."
                           throw $_
                       }
 
                       Write-Host ">>> מנוע ה-AI האוטונומי מנתח את השגיאה ומתאים פתרון..."
                       
-                      # ניתוח חכם של סוג השגיאה והפעמת תרופה ייעודית
                       if ($errorMessage -match "NuGet|package|restore|dependency|NU") {
                           Write-Host ">>> זיהוי שגיאת חבילות/NuGet. מנקה קאש חבילות ומאפס..."
                           dotnet nuget locals all --clear
@@ -165,11 +163,10 @@ jobs:
                           Start-Sleep -Seconds 5
                       }
                       else {
-                          Write-Host ">>> שגיאה כללית מבנית. מבצע איפוס עמוק של סביבת העבודה (Clean & Rebuild Scaffold)..."
+                          Write-Host ">>> שגיאה כללית מבנית. מבצע איפוס עמוק של סביבת העבודה..."
                           Remove-LockedFolderForce "obj"
                           Remove-LockedFolderForce "bin"
                           Remove-LockedFolderForce "src_win"
-                          # במידה והשלד נהרס, נייצר אותו מחדש בריצה הבאה
                       }
 
                       $attempt++
@@ -381,13 +378,13 @@ jobs:
 
               while ($attempt -le $maxRetries) {
                   try {
-                      Write-Host ">>> מריץ פעולה לאנדרואיד ($ContextName) - ניסיון $attempt/$maxRetries..."
+                      Write-Host ">>> מריץ פעולה לאנדרואיד (${ContextName}) - ניסיון $attempt/$maxRetries..."
                       & $ScriptBlock
                       Write-Host ">>> פעולה הצליחה!"
                       return
                   } catch {
                       $errorMessage = $_.Exception.Message
-                      Write-Warning "⚠️ שגיאה באנדרואיד ברובד $ContextName: $errorMessage"
+                      Write-Warning "⚠️ שגיאה באנדרואיד ברובד ${ContextName}: $errorMessage"
 
                       if ($attempt -eq $maxRetries) {
                           Write-Error "❌ ניסיונות התיקון לאנדרואיד מוצו."
