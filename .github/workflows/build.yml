@@ -63,7 +63,6 @@ jobs:
           if (Test-Path "android_app") { Remove-Item "android_app" -Recurse -Force }
           if (Test-Path "build_output") { Remove-Item "build_output" -Recurse -Force }
           
-          # הסרת כל שאריות נתיבים ארוכים או מקוננים במידה ונוצרו
           Get-ChildItem -Path . -Recurse -Filter "src_win" | ForEach-Object {
               try { Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue } catch {}
           }
@@ -119,7 +118,7 @@ jobs:
           if (Test-Path "icon.png") { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
 
       # ==========================================
-      # בניית Windows עם הגנה מלאה
+      # בניית Windows ללא צורך בעריכת XML
       # ==========================================
       - name: Setup .NET SDK
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
@@ -175,30 +174,12 @@ jobs:
                       Set-Location $workspaceRoot
                       
                       switch ($currentStrategy) {
-                          1 {
-                              Stop-Process -Name "dotnet", "msbuild" -Force -ErrorAction SilentlyContinue
-                              Remove-LockedFolderForce "$workspaceRoot/src_win/obj"
-                          }
-                          2 {
-                              Remove-LockedFolderForce "$workspaceRoot/src_win/obj"
-                              Remove-LockedFolderForce "$workspaceRoot/src_win/bin"
-                          }
+                          1 { Stop-Process -Name "dotnet", "msbuild" -Force -ErrorAction SilentlyContinue; Remove-LockedFolderForce "$workspaceRoot/src_win/obj" }
+                          2 { Remove-LockedFolderForce "$workspaceRoot/src_win/obj"; Remove-LockedFolderForce "$workspaceRoot/src_win/bin" }
                           3 { dotnet nuget locals all --clear }
-                          4 {
-                              if (Test-Path "$workspaceRoot/src_win") {
-                                  Get-ChildItem -Path "$workspaceRoot/src_win" -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object { $_.Attributes = 'Normal' }
-                              }
-                          }
-                          5 {
-                              if (Test-Path "$workspaceRoot/src_win") {
-                                  Set-Location "$workspaceRoot/src_win"
-                                  dotnet restore --force --no-cache
-                              }
-                          }
-                          6 {
-                              Remove-LockedFolderForce "$workspaceRoot/src_win/final_publish"
-                              Remove-LockedFolderForce "$workspaceRoot/src_win/bin/Release"
-                          }
+                          4 { if (Test-Path "$workspaceRoot/src_win") { Get-ChildItem -Path "$workspaceRoot/src_win" -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object { $_.Attributes = 'Normal' } } }
+                          5 { if (Test-Path "$workspaceRoot/src_win") { Set-Location "$workspaceRoot/src_win"; dotnet restore --force --no-cache } }
+                          6 { Remove-LockedFolderForce "$workspaceRoot/src_win/final_publish"; Remove-LockedFolderForce "$workspaceRoot/src_win/bin/Release" }
                           7 { Remove-LockedFolderForce "$env:LocalAppData\Microsoft\MSBuild" }
                           8 { dotnet build-server shutdown }
                           9 { Remove-LockedFolderForce "$workspaceRoot/src_win" }
@@ -226,46 +207,20 @@ jobs:
 
               $csprojFile = Get-ChildItem -Path . -Filter "*.csproj" | Select-Object -First 1
               if (-not $csprojFile) { throw "קובץ ה-csproj חסר או נפגם!" }
-              $csprojPath = $csprojFile.Name
 
               $appVersion = $env:APP_VERSION
               $appName = $env:APP_NAME
 
-              [xml]$xml = Get-Content $csprojPath
-              if (-not $xml.Project -or -not $xml.Project.PropertyGroup) {
-                  throw "מבנה קובץ ה-csproj אינו תקין או ריק!"
-              }
-              $pg = $xml.Project.PropertyGroup[0]
-
-              function Set-XmlProperty {
-                  param($Parent, $TagName, $Value)
-                  $node = $Parent.$TagName
-                  if ($node) {
-                      $Parent.$TagName = $Value
-                  } else {
-                      $elem = $xml.CreateElement($TagName)
-                      $elem.InnerText = $Value
-                      $Parent.AppendChild($elem) | Out-Null
-                  }
-              }
-
-              Set-XmlProperty -Parent $pg -TagName "OutputType" -Value "WinExe"
-              Set-XmlProperty -Parent $pg -TagName "Version" -Value $appVersion
-              Set-XmlProperty -Parent $pg -TagName "AssemblyVersion" -Value $appVersion
-              Set-XmlProperty -Parent $pg -TagName "FileVersion" -Value $appVersion
-              Set-XmlProperty -Parent $pg -TagName "Product" -Value $appName
-              Set-XmlProperty -Parent $pg -TagName "Company" -Value "ינון דרייב"
-
+              $iconArg = ""
               if ($env:ICON_AVAILABLE == 'true' -and (Test-Path "$workspaceRoot/icon.png")) {
                   Copy-Item "$workspaceRoot/icon.png" "icon.png" -Force
                   try {
                       magick icon.png -resize 256x256! -define icon:auto-resize=256,128,64,48,32,16 icon.ico
                       if (Test-Path "icon.ico") {
-                          Set-XmlProperty -Parent $pg -TagName "ApplicationIcon" -Value "icon.ico"
+                          $iconArg = "icon.ico"
                       }
                   } catch { }
               }
-              $xml.Save((Get-Item $csprojPath).FullName)
 
               $safeAppName = $appName -replace '"', '\"'
               $safeSource = $env:FINAL_SOURCE -replace '"', '\"' -replace '\\', '\\\\'
@@ -340,8 +295,29 @@ jobs:
               )
               $formCodeLines | Set-Content -Path "Program.cs" -Encoding UTF8
 
-              Write-Host ">>> מריץ תהליך קומפילציה מלא (Publish)..."
-              dotnet publish -c Release -r win-x64 -p:OutputType=WinExe -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+              Write-Host ">>> מריץ תהליך קומפילציה מלא (Publish) ישירות עם פרמטרים מובנים..."
+              $publishArgs = @(
+                  "publish",
+                  "-c", "Release",
+                  "-r", "win-x64",
+                  "--self-contained", "true",
+                  "-p:PublishSingleFile=true",
+                  "-p:IncludeNativeLibrariesForSelfExtract=true",
+                  "-p:EnableCompressionInSingleFile=true",
+                  "-p:OutputType=WinExe",
+                  "-p:Version=$appVersion",
+                  "-p:AssemblyVersion=$appVersion",
+                  "-p:FileVersion=$appVersion",
+                  "-p:Product=$appName",
+                  "-p:Company=ינון דרייב"
+              )
+              if (-not [string]::IsNullOrEmpty($iconArg)) {
+                  $publishArgs += "-p:ApplicationIcon=$iconArg"
+              }
+              $publishArgs += "-o"
+              $publishArgs += "./final_publish"
+
+              dotnet @publishArgs
               
               New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
               $exeFile = Get-ChildItem -Path "./final_publish" -Filter "*.exe" -File | Select-Object -First 1
@@ -383,6 +359,6 @@ jobs:
           tag_name: v${{ env.APP_VERSION }}-build-${{ github.run_number }}
           name: '${{ env.APP_NAME }} v${{ env.APP_VERSION }} (${{ env.TARGET_PLATFORM }})'
           body: |
-            האפליקציה נוצרה בהצלחה.
+            האפליקציה נוצרה בהצלחה ללא שגיאות XML.
           draft: false
           prerelease: false
