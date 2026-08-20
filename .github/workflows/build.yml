@@ -1,4 +1,4 @@
-name: Universal Cross-Platform App Builder (Pro)
+name: Universal Cross-Platform App Builder (Pro Enhanced)
 
 on:
   workflow_dispatch:
@@ -45,6 +45,7 @@ jobs:
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $url = "${{ github.event.inputs.website_url }}".Trim()
           $local = "${{ github.event.inputs.local_html_file }}".Trim()
+          if ([string]::IsNullOrWhiteSpace($local)) { $local = "index.html" }
           
           if (-not [string]::IsNullOrWhiteSpace($url)) {
             Write-Host ">>> מקור נבחר: כתובת אינטרנט -> $url"
@@ -90,37 +91,46 @@ jobs:
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host ">>> יוצר פרויקט C# WinForms..."
-          dotnet new winforms -n UniversalAppProject -o . --force
+          Write-Host ">>> יוצר פרויקט C# WinForms בתיקייה נפרדת..."
+          New-Item -ItemType Directory -Force -Path "src_win"
+          Set-Location "src_win"
+
+          dotnet new winforms -n UniversalAppProject
           dotnet add package Microsoft.Web.WebView2
 
           $appVersion = "${{ github.event.inputs.app_version }}"
           $appName = "${{ github.event.inputs.app_name }}"
-          $csproj = Get-Content UniversalAppProject.csproj -Raw
-          $csproj = $csproj -replace '<OutputType>Exe</OutputType>', '<OutputType>WinExe</OutputType>'
-          
-          $versionProps = @"
-            <Version>$appVersion</Version>
-            <AssemblyVersion>$appVersion</AssemblyVersion>
-            <FileVersion>$appVersion</FileVersion>
-            <Product>$appName</Product>
-            <Company>ינון דרייב</Company>
-          "@
-          $csproj = $csproj -replace '</PropertyGroup>', "$versionProps`n  </PropertyGroup>"
-          
-          if ($env:ICON_AVAILABLE -eq 'true') {
+
+          # עריכת קובץ ה-.csproj בצורה מבוססת XML (בטוחה לגמרי)
+          $csprojPath = "UniversalAppProject.csproj"
+          [xml]$xml = Get-Content $csprojPath
+          $xml.Project.PropertyGroup[0].OutputType = "WinExe"
+          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Version")) | Out-Null
+          $xml.Project.PropertyGroup[0].Version = $appVersion
+          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("AssemblyVersion")) | Out-Null
+          $xml.Project.PropertyGroup[0].AssemblyVersion = $appVersion
+          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("FileVersion")) | Out-Null
+          $xml.Project.PropertyGroup[0].FileVersion = $appVersion
+          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Product")) | Out-Null
+          $xml.Project.PropertyGroup[0].Product = $appName
+          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Company")) | Out-Null
+          $xml.Project.PropertyGroup[0].Company = "ינון דרייב"
+
+          if ("${{ env.ICON_AVAILABLE }}" -eq 'true') {
+              Copy-Item "../icon.png" "icon.png" -Force
               Write-Host ">>> ממיר תמונה לאייקון .ico..."
               cmd.exe /c "npx --yes png-to-ico icon.png > icon.ico"
               if (Test-Path "icon.ico") {
-                  $csproj = $csproj -replace '</PropertyGroup>', "<ApplicationIcon>icon.ico</ApplicationIcon>`n  </PropertyGroup>"
+                  $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("ApplicationIcon")) | Out-Null
+                  $xml.Project.PropertyGroup[0].ApplicationIcon = "icon.ico"
               }
           }
           
-          Set-Content UniversalAppProject.csproj -Value $csproj -Encoding UTF8
+          $xml.Save((Get-Item $csprojPath).FullName)
 
           $safeAppName = $appName -replace '"', '\"'
-          $safeSource = $env:FINAL_SOURCE -replace '"', '\"' -replace '\\', '\\\\'
-          $isUrl = $env:IS_URL
+          $safeSource = "${{ env.FINAL_SOURCE }}" -replace '"', '\"' -replace '\\', '\\\\'
+          $isUrl = "${{ env.IS_URL }}"
 
           $formCode = @"
           using System;
@@ -176,7 +186,7 @@ jobs:
                       {
                           await webView.EnsureCoreWebView2Async(null);
                           string target = `"$safeSource`";
-                          bool isUrl = $isUrl;
+                          bool isUrl = System.Convert.ToBoolean(`"$isUrl`".ToLower());
 
                           if (isUrl) 
                           {
@@ -201,11 +211,13 @@ jobs:
           Set-Content -Path "Program.cs" -Value $formCode -Encoding UTF8
 
           dotnet publish -c Release -r win-x64 -p:OutputType=WinExe -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+          
+          Set-Location ..
           New-Item -ItemType Directory -Force -Path "build_output"
-          Get-ChildItem -Path "./final_publish" -Filter "*.exe" | Copy-Item -Destination "build_output/"
+          Get-ChildItem -Path "src_win/final_publish" -Filter "*.exe" | Copy-Item -Destination "build_output/"
 
       - name: Sign Windows Executable
-        if: ${{ github.event.inputs.target_platform == 'windows' && env.CERTIFICATE_BASE64 != '' }}
+        if: ${{ github.event.inputs.target_platform == 'windows' }}
         shell: pwsh
         env:
           CERT_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
@@ -213,21 +225,27 @@ jobs:
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           if ([string]::IsNullOrWhiteSpace($env:CERT_BASE64)) {
-              Write-Host ">>> לא נמצאה תעודת חתימה, מדלג..."
+              Write-Host ">>> לא הוגדרה תעודת חתימה (CERTIFICATE_BASE64), מדלג על שלב החתימה..."
               exit 0
           }
-          Write-Host ">>> חותם על ה-EXE..."
+          Write-Host ">>> מאתר את signtool.exe..."
+          $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue)?.Source
+          if (-not $signtool) {
+              $signtool = (Get-ChildItem "C:\Program Files*\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -First 1).FullName
+          }
+          if (-not $signtool -or -not (Test-Path $signtool)) {
+              Write-Error "שגיאה: לא ניתן למצוא את כלי החתימה signtool.exe!"
+              exit 1
+          }
+
+          Write-Host ">>> חותם על ה-EXE באמצעות HTTPS Timestamp..."
           $certBytes = [System.Convert]::FromBase64String($env:CERT_BASE64)
           $certPath = "$env:TEMP\temp_cert.pfx"
           [System.IO.File]::WriteAllBytes($certPath, $certBytes)
-          $signtool = (Get-ChildItem "C:\Program Files*\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -First 1).FullName
+          
           $exeToSign = Get-ChildItem -Path "build_output" -Filter "*.exe" -File | Select-Object -First 1
-          & $signtool sign /v /f $certPath /p "$env:CERT_PASSWORD" /tr http://timestamp.digicert.com /td sha256 /fd SHA256 $exeToSign.FullName
-
-      - name: Cleanup Windows Certificate
-        if: ${{ always() && github.event.inputs.target_platform == 'windows' }}
-        shell: pwsh
-        run: Remove-Item "$env:TEMP\temp_cert.pfx" -Force -ErrorAction SilentlyContinue
+          & $signtool sign /v /f $certPath /p "$env:CERT_PASSWORD" /tr https://timestamp.digicert.com /td sha256 /fd SHA256 $exeToSign.FullName
+          Remove-Item $certPath -Force -ErrorAction SilentlyContinue
 
       # ==========================================
       # מסלול ב': בניית אפליקציית Android (APK)
@@ -254,19 +272,19 @@ jobs:
           Write-Host ">>> יוצר פרויקט אנדרואיד..."
           cordova create android_app com.yinon.app "${{ github.event.inputs.app_name }}"
           
-          if ($env:ICON_AVAILABLE -eq 'true') {
+          if ("${{ env.ICON_AVAILABLE }}" -eq 'true') {
               Copy-Item "icon.png" "android_app/icon.png" -Force
           }
 
           Set-Location android_app
           cordova platform add android
 
-          $source = $env:FINAL_SOURCE
-          $isUrl = $env:IS_URL
+          $source = "${{ env.FINAL_SOURCE }}"
+          $isUrl = "${{ env.IS_URL }}"
           $configPath = "config.xml"
           $configContent = Get-Content $configPath -Raw
 
-          if ($env:ICON_AVAILABLE -eq 'true') {
+          if ("${{ env.ICON_AVAILABLE }}" -eq 'true') {
               $configContent = $configContent -replace '</widget>', "<icon src=`"icon.png`" />`n</widget>"
           }
 
@@ -276,7 +294,7 @@ jobs:
             $configContent = $configContent -replace '</widget>', "<access origin=`"*`" />`n<allow-navigation href=`"*`" />`n</widget>"
           } else {
             Write-Host ">>> מעתיק קבצים מקומיים ל-Assets..."
-            Get-ChildItem -Path .. -Exclude "android_app", "icon.png", ".git", ".github" | Copy-Item -Destination "www" -Recurse -Force
+            Get-ChildItem -Path .. -Exclude "android_app", "icon.png", "src_win", ".git", ".github" | Copy-Item -Destination "www" -Recurse -Force
           }
           
           Set-Content $configPath -Value $configContent -Encoding UTF8
