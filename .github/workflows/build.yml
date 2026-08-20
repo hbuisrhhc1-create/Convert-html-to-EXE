@@ -127,16 +127,26 @@ jobs:
           Write-Host ">>> יוצר פרויקט C# WinForms חדש..."
           dotnet new winforms -n UniversalAppProject -f net8.0-windows
           
-          if (Test-Path "UniversalAppProject/UniversalAppProject.csproj") {
-              Set-Location "UniversalAppProject"
+          # חיפוש דינמי חסין תקלות של קובץ ה-csproj בכל מבנה תיקיות אפשרי
+          $csprojFile = Get-ChildItem -Path . -Filter "UniversalAppProject.csproj" -Recurse | Select-Object -First 1
+          if (-not $csprojFile) {
+              $csprojFile = Get-ChildItem -Path . -Filter "*.csproj" -Recurse | Select-Object -First 1
           }
+          
+          if (-not $csprojFile) {
+              Write-Error "שגיאה קריטית: קובץ ה-csproj לא נמצא באף תיקייה תחת src_win!"
+              exit 1
+          }
+
+          Write-Host ">>> נמצא קובץ הפרויקט בנתיב: $($csprojFile.FullName)"
+          Set-Location $csprojFile.DirectoryName
+          $csprojPath = $csprojFile.Name
 
           dotnet add package Microsoft.Web.WebView2
 
           $appVersion = $env:APP_VERSION
           $appName = $env:APP_NAME
 
-          $csprojPath = "UniversalAppProject.csproj"
           [xml]$xml = Get-Content $csprojPath
           $xml.Project.PropertyGroup[0].OutputType = "WinExe"
           
@@ -151,7 +161,7 @@ jobs:
           $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Company")) | Out-Null
           $xml.Project.PropertyGroup[0].Company = "ינון דרייב"
 
-          if ($env:ICON_AVAILABLE -eq 'true') {
+          if ($env:ICON_AVAILABLE == 'true') {
               $sourceIconPath = "$workspaceRoot/icon.png"
               if (Test-Path $sourceIconPath) {
                   Copy-Item $sourceIconPath "icon.png" -Force
@@ -226,7 +236,6 @@ jobs:
                       
                       try
                       {
-                          // קריטי: הגדרת תיקיית מטמון ב-LocalAppData כדי למנוע קריסות שגיאת כתיבה
                           string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), `"$safeAppName`");
                           var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
                           await webView.EnsureCoreWebView2Async(env);
@@ -326,7 +335,7 @@ jobs:
           Write-Host ">>> יוצר פרויקט אנדרואיד..."
           cordova create android_app com.universal.app "AppTempName"
           
-          if ($env:ICON_AVAILABLE -eq 'true') {
+          if ($env:ICON_AVAILABLE == 'true') {
               Copy-Item "$workspaceRoot/icon.png" "android_app/icon.png" -Force -ErrorAction SilentlyContinue
           }
 
@@ -343,16 +352,14 @@ jobs:
           $configContent = Get-Content $configPath -Raw
 
           $configContent = $configContent -replace '<name>AppTempName</name>', "<name>$safeAppNameXml</name>"
-          
-          # החלפת הניתוב גם ל-URL וגם לקובץ מקומי במקרה שלא נקרא index.html
           $configContent = $configContent -replace '<content src="index\.html"\s*/>', "<content src=`"$source`" />"
 
-          if ($env:ICON_AVAILABLE -eq 'true') {
+          if ($env:ICON_AVAILABLE == 'true') {
               Write-Host ">>> מוסיף הגדרות אייקון לאנדרואיד..."
               $configContent = $configContent -replace '</widget>', "<icon src=`"icon.png`" />`n</widget>"
           }
 
-          if ($isUrl -eq 'true') {
+          if ($isUrl == 'true') {
             Write-Host ">>> מגדיר הרשאות URL באפליקציה..."
             $configContent = $configContent -replace '</widget>', "<access origin=`"*`" />`n<allow-navigation href=`"*`" />`n</widget>"
           } else {
@@ -372,7 +379,7 @@ jobs:
           if ($apkFile) {
               $destApk = "$workspaceRoot/build_output/$($env:SAFE_FILE_NAME).apk"
               Copy-Item $apkFile.FullName -Destination $destApk -Force
-              Write-Host ">>> ה-APK הועבר ושמו שונה ל- $destApk"
+              Write-Host ">>> ה-APK הועבר ושמו שונה ל- $destExe"
           }
 
       # ==========================================
