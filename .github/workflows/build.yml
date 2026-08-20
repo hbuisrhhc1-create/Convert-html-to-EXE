@@ -51,6 +51,12 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          
+          # יצירת שם קובץ בטוח ללא תווים אסורים
+          $safeFileName = $env:APP_NAME -replace '[<>:"/\\|?*]', ''
+          if ([string]::IsNullOrWhiteSpace($safeFileName)) { $safeFileName = "BuiltApp" }
+          echo "SAFE_FILE_NAME=$safeFileName" >> $env:GITHUB_ENV
+
           $url = $env:WEBSITE_URL.Trim()
           $local = $env:LOCAL_HTML.Trim()
           if ([string]::IsNullOrWhiteSpace($local)) { $local = "index.html" }
@@ -97,7 +103,7 @@ jobs:
           if ($iconFound) { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
 
       # ==========================================
-      # מסלול א': בניית תוכנת Windows (EXE) + חתימה
+      # מסלול א': בניית תוכנת Windows (EXE)
       # ==========================================
       - name: Setup .NET SDK
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
@@ -118,14 +124,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path "src_win" | Out-Null
           Set-Location "src_win"
 
-          Write-Host ">>> יוצר פרויקט C# WinForms חדש לחלוטין..."
+          Write-Host ">>> יוצר פרויקט C# WinForms חדש..."
           dotnet new winforms -n UniversalAppProject -f net8.0-windows
           
-          if (-not (Test-Path "UniversalAppProject/UniversalAppProject.csproj") -and -not (Test-Path "UniversalAppProject.csproj")) {
-              Write-Error "שגיאה קריטית: קובץ ה-csproj לא נוצר בהצלחה!"
-              exit 1
-          }
-
           if (Test-Path "UniversalAppProject/UniversalAppProject.csproj") {
               Set-Location "UniversalAppProject"
           }
@@ -139,7 +140,6 @@ jobs:
           [xml]$xml = Get-Content $csprojPath
           $xml.Project.PropertyGroup[0].OutputType = "WinExe"
           
-          # שימוש ב-AppendChild ב-XML מוודא שגם תווים בעייתיים מטופלים נכון
           $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Version")) | Out-Null
           $xml.Project.PropertyGroup[0].Version = $appVersion
           $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("AssemblyVersion")) | Out-Null
@@ -155,9 +155,9 @@ jobs:
               $sourceIconPath = "$workspaceRoot/icon.png"
               if (Test-Path $sourceIconPath) {
                   Copy-Item $sourceIconPath "icon.png" -Force
-                  Write-Host ">>> ממיר תמונה לאייקון .ico באמצעות ImageMagick..."
+                  Write-Host ">>> ממיר תמונה לאייקון .ico וחותך לריבוע באמצעות ImageMagick..."
                   try {
-                      magick icon.png -define icon:auto-resize=256,128,64,48,32,16 icon.ico
+                      magick icon.png -resize 256x256! -define icon:auto-resize=256,128,64,48,32,16 icon.ico
                       if (Test-Path "icon.ico") {
                           $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("ApplicationIcon")) | Out-Null
                           $xml.Project.PropertyGroup[0].ApplicationIcon = "icon.ico"
@@ -226,7 +226,11 @@ jobs:
                       
                       try
                       {
-                          await webView.EnsureCoreWebView2Async(null);
+                          // קריטי: הגדרת תיקיית מטמון ב-LocalAppData כדי למנוע קריסות שגיאת כתיבה
+                          string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), `"$safeAppName`");
+                          var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                          await webView.EnsureCoreWebView2Async(env);
+                          
                           string target = `"$safeSource`";
                           bool isUrl = System.Convert.ToBoolean(`"$isUrl`".ToLower());
 
@@ -256,7 +260,12 @@ jobs:
           dotnet publish -c Release -r win-x64 -p:OutputType=WinExe -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
           
           New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
-          Get-ChildItem -Path "./final_publish" -Filter "*.exe" | Copy-Item -Destination "$workspaceRoot/build_output/"
+          $exeFile = Get-ChildItem -Path "./final_publish" -Filter "*.exe" -File | Select-Object -First 1
+          if ($exeFile) {
+              $destExe = "$workspaceRoot/build_output/$($env:SAFE_FILE_NAME).exe"
+              Copy-Item $exeFile.FullName -Destination $destExe -Force
+              Write-Host ">>> ה-EXE הועבר ושמו שונה ל- $destExe"
+          }
 
       - name: Sign Windows Executable
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
@@ -293,6 +302,12 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Setup Node.js (For Cordova Stability)
+        if: ${{ env.TARGET_PLATFORM == 'Android' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Setup Android SDK
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
         uses: android-actions/setup-android@v3
@@ -322,13 +337,15 @@ jobs:
           $isUrl = $env:IS_URL
           $appName = $env:APP_NAME
           
-          # הגנה על השם כך שלא ישבור את קובץ ה-XML אם יש בו תווים מיוחדים
           $safeAppNameXml = [System.Security.SecurityElement]::Escape($appName)
 
           $configPath = "config.xml"
           $configContent = Get-Content $configPath -Raw
 
           $configContent = $configContent -replace '<name>AppTempName</name>', "<name>$safeAppNameXml</name>"
+          
+          # החלפת הניתוב גם ל-URL וגם לקובץ מקומי במקרה שלא נקרא index.html
+          $configContent = $configContent -replace '<content src="index\.html"\s*/>', "<content src=`"$source`" />"
 
           if ($env:ICON_AVAILABLE -eq 'true') {
               Write-Host ">>> מוסיף הגדרות אייקון לאנדרואיד..."
@@ -336,13 +353,12 @@ jobs:
           }
 
           if ($isUrl -eq 'true') {
-            Write-Host ">>> הגדרת URL באפליקציה: $source"
-            $configContent = $configContent -replace '<content src="index.html" />', "<content src=`"$source`" />"
+            Write-Host ">>> מגדיר הרשאות URL באפליקציה..."
             $configContent = $configContent -replace '</widget>', "<access origin=`"*`" />`n<allow-navigation href=`"*`" />`n</widget>"
           } else {
             Write-Host ">>> מעתיק קבצים מקומיים ל-Assets..."
-            # וידוא שתיקיית www נקייה לחלוטין מתוכן קודם של Cordova
             if (Test-Path "www") { Remove-Item "www\*" -Recurse -Force -ErrorAction SilentlyContinue }
+            New-Item -ItemType Directory -Force -Path "www" | Out-Null
             Get-ChildItem -Path $workspaceRoot -Exclude "android_app", "icon.png", "src_win", ".git", ".github", "build_output" | Copy-Item -Destination "www" -Recurse -Force
           }
           
@@ -352,7 +368,12 @@ jobs:
           cordova build android --release
 
           New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
-          Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" | Copy-Item -Destination "$workspaceRoot/build_output/"
+          $apkFile = Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" -File | Select-Object -First 1
+          if ($apkFile) {
+              $destApk = "$workspaceRoot/build_output/$($env:SAFE_FILE_NAME).apk"
+              Copy-Item $apkFile.FullName -Destination $destApk -Force
+              Write-Host ">>> ה-APK הועבר ושמו שונה ל- $destApk"
+          }
 
       # ==========================================
       # סיום והעלאת קבצים
@@ -360,6 +381,6 @@ jobs:
       - name: Artifact Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-${{ env.TARGET_PLATFORM }}-Build
+          name: ${{ env.SAFE_FILE_NAME }}-${{ env.TARGET_PLATFORM }}-Build
           path: build_output/
           retention-days: 7
