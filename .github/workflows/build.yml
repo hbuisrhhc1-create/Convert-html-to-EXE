@@ -14,7 +14,7 @@ on:
       website_url:
         description: 'כתובת אתר מלאה (למשל https://example.com) - השאר ריק אם משתמש בקובץ מקומי'
         required: false
-        default: 'https://123456-omega-ecru.vercel.app/'
+        default: ''
         type: string
       local_html_file:
         description: 'קובץ HTML מקומי ראשי (רלוונטי רק אם כתובת האתר ריקה)'
@@ -24,7 +24,7 @@ on:
       app_name:
         description: 'שם התוכנה / אפליקציה'
         required: true
-        default: 'כספת טקסט וקבצים'
+        default: ''
         type: string
       app_version:
         description: 'גרסת התוכנה'
@@ -295,29 +295,30 @@ jobs:
               )
               $formCodeLines | Set-Content -Path "Program.cs" -Encoding UTF8
 
-              Write-Host ">>> מריץ תהליך קומפילציה מלא (Publish)..."
-              $publishArgs = @(
-                  "publish",
-                  "-c", "Release",
-                  "-r", "win-x64",
-                  "--self-contained", "true",
-                  "-p:PublishSingleFile=true",
-                  "-p:IncludeNativeLibrariesForSelfExtract=true",
-                  "-p:EnableCompressionInSingleFile=true",
-                  "-p:OutputType=WinExe",
-                  "-p:Version=$appVersion",
-                  "-p:AssemblyVersion=$appVersion",
-                  "-p:FileVersion=$appVersion",
-                  "-p:Product=$appName",
-                  "-p:Company=ינון דרייב"
-              )
+              Write-Host ">>> מריץ תהליך קומפילציה מלא (Publish) באמצעות תהליך ישיר..."
+              
+              $iconParamStr = ""
               if (-not [string]::IsNullOrEmpty($iconArg)) {
-                  $publishArgs += "-p:ApplicationIcon=$iconArg"
+                  $iconParamStr = "-p:ApplicationIcon=`"$iconArg`""
               }
-              $publishArgs += "-o"
-              $publishArgs += "./final_publish"
 
-              dotnet @publishArgs
+              $psi = New-Object System.Diagnostics.ProcessStartInfo
+              $psi.FileName = "dotnet"
+              $psi.Arguments = "publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:OutputType=""WinExe"" -p:Version=""$appVersion"" -p:AssemblyVersion=""$appVersion"" -p:FileVersion=""$appVersion"" -p:Product=""$appName"" -p:Company=""UniversalApp"" $iconParamStr -o ""./final_publish"""
+              $psi.UseShellExecute = $false
+              $psi.RedirectStandardOutput = $true
+              $psi.RedirectStandardError = $true
+
+              $process = [System.Diagnostics.Process]::Start($psi)
+              $stdout = $process.StandardOutput.ReadToEnd()
+              $stderr = $process.StandardError.ReadToEnd()
+              $process.WaitForExit()
+
+              Write-Host $stdout
+              if ($process.ExitCode -ne 0) {
+                  Write-Error $stderr
+                  throw "שגיאה בקומפילציית .NET (Exit Code: $($process.ExitCode))"
+              }
               
               New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
               $exeFile = Get-ChildItem -Path "./final_publish" -Filter "*.exe" -File | Select-Object -First 1
