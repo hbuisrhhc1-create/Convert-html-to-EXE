@@ -100,7 +100,7 @@ jobs:
           if (Test-Path "icon.png") { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
 
       # ==========================================
-      # בניית Windows עם מטריצת 10 אסטרטגיות תיקון
+      # בניית Windows עם הגנה מפני נדידת תיקיות
       # ==========================================
       - name: Setup .NET SDK
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
@@ -134,9 +134,12 @@ jobs:
               param([scriptblock]$ScriptBlock, [string]$ContextName)
               $maxStrategies = 10
               $currentStrategy = 1
+              $workspaceRoot = $env:GITHUB_WORKSPACE
 
               while ($currentStrategy -le $maxStrategies) {
                   try {
+                      # קיבוע הכרחי של תיקיית העבודה לשורש לפני כל ניסיון
+                      Set-Location $workspaceRoot
                       Write-Host ">>> [$ContextName] מריץ אסטרטגיית תיקון מספר $currentStrategy/$maxStrategies..."
                       & $ScriptBlock
                       Write-Host ">>> [$ContextName] הבנייה הוכתרה בהצלחה!"
@@ -151,17 +154,18 @@ jobs:
                       }
 
                       Write-Host ">>> מנוע ה-AI מנתח ומפעיל את האסטרטגיה הבאה ברשימה..."
+                      Set-Location $workspaceRoot
                       
                       switch ($currentStrategy) {
                           1 {
                               Write-Host ">>> [אסטרטגיה 1] עצירת תהליכי דוט-נט רדומים ושחרור תיקיית obj..."
                               Stop-Process -Name "dotnet", "msbuild" -Force -ErrorAction SilentlyContinue
-                              Remove-LockedFolderForce "src_win/obj"
+                              Remove-LockedFolderForce "$workspaceRoot/src_win/obj"
                           }
                           2 {
                               Write-Host ">>> [אסטרטגיה 2] מחיקת תיקיות obj ו-bin גם יחד..."
-                              Remove-LockedFolderForce "src_win/obj"
-                              Remove-LockedFolderForce "src_win/bin"
+                              Remove-LockedFolderForce "$workspaceRoot/src_win/obj"
+                              Remove-LockedFolderForce "$workspaceRoot/src_win/bin"
                           }
                           3 {
                               Write-Host ">>> [אסטרטגיה 3] ניקוי עמוק של מטמון ה-NuGet הגלובלי במערכת..."
@@ -169,20 +173,21 @@ jobs:
                           }
                           4 {
                               Write-Host ">>> [אסטרטגיה 4] איפוס הרשאות קבצים וביטול מצב לקריאה בלבד..."
-                              Get-ChildItem -Path "src_win" -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object { $_.Attributes = 'Normal' }
+                              if (Test-Path "$workspaceRoot/src_win") {
+                                  Get-ChildItem -Path "$workspaceRoot/src_win" -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object { $_.Attributes = 'Normal' }
+                              }
                           }
                           5 {
                               Write-Host ">>> [אסטרטגיה 5] הרצת שחזור חבילות בכוח (dotnet restore --force)..."
-                              if (Test-Path "src_win") {
-                                  Set-Location "src_win"
+                              if (Test-Path "$workspaceRoot/src_win") {
+                                  Set-Location "$workspaceRoot/src_win"
                                   dotnet restore --force --no-cache
-                                  Set-Location ".."
                               }
                           }
                           6 {
                               Write-Host ">>> [אסטרטגיה 6] מחיקת קבצי נעילה זמניים ותיקיות פרסום..."
-                              Remove-LockedFolderForce "src_win/final_publish"
-                              Remove-LockedFolderForce "src_win/bin/Release"
+                              Remove-LockedFolderForce "$workspaceRoot/src_win/final_publish"
+                              Remove-LockedFolderForce "$workspaceRoot/src_win/bin/Release"
                           }
                           7 {
                               Write-Host ">>> [אסטרטגיה 7] ניקוי מטמון הקומפילציה הגלובלי של MSBuild..."
@@ -194,7 +199,7 @@ jobs:
                           }
                           9 {
                               Write-Host ">>> [אסטרטגיה 9] מחיקה מוחלטת של שלד הפרויקט (src_win) ובנייתו מאפס..."
-                              Remove-LockedFolderForce "src_win"
+                              Remove-LockedFolderForce "$workspaceRoot/src_win"
                           }
                           default {
                               Write-Host ">>> [אסטרטגיה 10] המתנה אקראית ואתחול מחדש של תהליכי המערכת..."
@@ -202,6 +207,7 @@ jobs:
                           }
                       }
 
+                      Set-Location $workspaceRoot
                       $currentStrategy++
                       Start-Sleep -Seconds 3
                   }
@@ -209,14 +215,15 @@ jobs:
           }
 
           $BuildWindowsLogic = {
-              if (-not (Test-Path "src_win")) {
-                  New-Item -ItemType Directory -Force -Path "src_win" | Out-Null
-                  Set-Location "src_win"
+              Set-Location $workspaceRoot
+              if (-not (Test-Path "$workspaceRoot/src_win")) {
+                  New-Item -ItemType Directory -Force -Path "$workspaceRoot/src_win" | Out-Null
+                  Set-Location "$workspaceRoot/src_win"
                   Write-Host ">>> יוצר שלד פרויקט C# WinForms חדש מאפס..."
                   dotnet new winforms -o . --force
                   dotnet add package Microsoft.Web.WebView2
               } else {
-                  Set-Location "src_win"
+                  Set-Location "$workspaceRoot/src_win"
               }
 
               $csprojFile = Get-ChildItem -Path . -Filter "*.csproj" | Select-Object -First 1
@@ -367,7 +374,7 @@ jobs:
           Remove-Item $certPath -Force -ErrorAction SilentlyContinue
 
       # ==========================================
-      # בניית Android עם מטריצת 10 אסטרטגיות תיקון
+      # בניית Android עם הגנה מפני נדידת תיקיות
       # ==========================================
       - name: Setup Java SDK
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
@@ -412,9 +419,11 @@ jobs:
               param([scriptblock]$ScriptBlock, [string]$ContextName)
               $maxStrategies = 10
               $currentStrategy = 1
+              $workspaceRoot = $env:GITHUB_WORKSPACE
 
               while ($currentStrategy -le $maxStrategies) {
                   try {
+                      Set-Location $workspaceRoot
                       Write-Host ">>> [$ContextName] מריץ אסטרטגיית תיקון אנדרואיד מספר $currentStrategy/$maxStrategies..."
                       & $ScriptBlock
                       Write-Host ">>> [$ContextName] הבנייה הצליחה!"
@@ -429,19 +438,21 @@ jobs:
                       }
 
                       Write-Host ">>> מנוע ה-AI עובר לאסטרטגיית התיקון הבאה..."
+                      Set-Location $workspaceRoot
                       switch ($currentStrategy) {
-                          1 { Stop-Process -Name "node", "java" -Force -ErrorAction SilentlyContinue; Remove-LockedFolderForce "android_app/platforms" }
+                          1 { Stop-Process -Name "node", "java" -Force -ErrorAction SilentlyContinue; Remove-LockedFolderForce "$workspaceRoot/android_app/platforms" }
                           2 { npm cache clean --force }
-                          3 { Remove-LockedFolderForce "android_app/plugins" }
+                          3 { Remove-LockedFolderForce "$workspaceRoot/android_app/plugins" }
                           4 { npm install -g cordova@latest }
-                          5 { Remove-LockedFolderForce "android_app/.gradle" }
-                          6 { Remove-LockedFolderForce "android_app/www" }
-                          7 { Remove-LockedFolderForce "android_app/platforms/android/app/build" }
+                          5 { Remove-LockedFolderForce "$workspaceRoot/android_app/.gradle" }
+                          6 { Remove-LockedFolderForce "$workspaceRoot/android_app/www" }
+                          7 { Remove-LockedFolderForce "$workspaceRoot/android_app/platforms/android/app/build" }
                           8 { Remove-LockedFolderForce "$env:USERPROFILE\.gradle" }
-                          9 { Remove-LockedFolderForce "android_app" }
+                          9 { Remove-LockedFolderForce "$workspaceRoot/android_app" }
                           default { Start-Sleep -Seconds 4 }
                       }
 
+                      Set-Location $workspaceRoot
                       $currentStrategy++
                       Start-Sleep -Seconds 3
                   }
@@ -449,18 +460,19 @@ jobs:
           }
 
           $BuildAndroidLogic = {
+              Set-Location $workspaceRoot
               Write-Host ">>> מוודא התקנת Cordova..."
               npm install -g cordova
 
-              if (-not (Test-Path "android_app")) {
+              if (-not (Test-Path "$workspaceRoot/android_app")) {
                   cordova create android_app com.universal.app "AppTempName"
               }
 
               if ($env:ICON_AVAILABLE == 'true' -and (Test-Path "$workspaceRoot/icon.png")) {
-                  Copy-Item "$workspaceRoot/icon.png" "android_app/icon.png" -Force -ErrorAction SilentlyContinue
+                  Copy-Item "$workspaceRoot/icon.png" "$workspaceRoot/android_app/icon.png" -Force -ErrorAction SilentlyContinue
               }
 
-              Set-Location android_app
+              Set-Location "$workspaceRoot/android_app"
               if (-not (Test-Path "platforms/android")) {
                   cordova platform add android
               }
@@ -534,6 +546,6 @@ jobs:
           tag_name: v${{ env.APP_VERSION }}-build-${{ github.run_number }}
           name: '${{ env.APP_NAME }} v${{ env.APP_VERSION }} (${{ env.TARGET_PLATFORM }})'
           body: |
-            האפליקציה נוצרה בהצלחה באמצעות מטריצת 10 שלבי התיקון האוטונומיים.
+            האפליקציה נוצרה בהצלחה באמצעות מטריצת 10 שלבי התיקון האוטונומיים עם מנגנון הגנה על נתיבים.
           draft: false
           prerelease: false
