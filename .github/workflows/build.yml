@@ -291,31 +291,29 @@ jobs:
           
           Set-Content $configPath -Value $configContent -Encoding UTF8
 
-          # שחזור קובץ ה-Keystore מתוך ה-Secret של GitHub
-          Write-Host ">>> משחזר את קובץ המפתח (Keystore)..."
-          $keystoreBytes = [System.Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64)
-          [System.IO.File]::WriteAllBytes("release-key.jks", $keystoreBytes)
+          Write-Host ">>> מקמפל APK (מצב Release ללא חתימה אוטומטית)..."
+          cordova build android --release --no-sign
 
-          # יצירת קובץ build.json כדי שקורדוובה תדע לחתום אוטומטית על ה-APK
-          Write-Host ">>> יוצר את הגדרות החתימה (build.json)..."
-          $buildJson = @{
-              android = @{
-                  release = @{
-                      keystore = "release-key.jks"
-                      storePassword = $env:ANDROID_KEYSTORE_PASSWORD
-                      alias = $env:ANDROID_KEY_ALIAS
-                      password = $env:ANDROID_KEY_PASSWORD
-                      keystoreType = "jks"
-                  }
-              }
-          } | ConvertTo-Json -Depth 5
-          Set-Content -Path "build.json" -Value $buildJson -Encoding UTF8
+          Write-Host ">>> מאתר את ה-APK הלא חתום..."
+          $unsignedApk = Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" | Select-Object -First 1
+          if (-not $unsignedApk) {
+              Write-Error "שגיאה: קובץ ה-APK הלא חתום לא נמצא!"
+              exit 1
+          }
 
-          Write-Host ">>> מקמפלו חותם APK (מצב Release)..."
-          cordova build android --release -- --keystore=release-key.jks --storePassword=$env:ANDROID_KEYSTORE_PASSWORD --alias=$env:ANDROID_KEY_ALIAS --password=$env:ANDROID_KEY_PASSWORD
+          Write-Host ">>> מאתר את כלי החתימה (apksigner ו-zipalign)..."
+          $buildToolsDir = Get-ChildItem "$env:ANDROID_HOME/build-tools/*" | Sort-Object Name -Descending | Select-Object -First 1
+          $apksigner = "$($buildToolsDir.FullName)/apksigner.bat"
+          $zipalign = "$($buildToolsDir.FullName)/zipalign.exe"
+
+          Write-Host ">>> מבצע Zipalign..."
+          & $zipalign -v 4 $unsignedApk.FullName "unsigned-aligned.apk"
+
+          Write-Host ">>> חותם על ה-APK באמצעות המפתח שלנו..."
+          & $apksigner sign --ks "release-key.jks" --ks-pass "pass:$env:ANDROID_KEYSTORE_PASSWORD" --ks-key-alias "$env:ANDROID_KEY_ALIAS" --key-pass "pass:$env:ANDROID_KEYSTORE_PASSWORD" "unsigned-aligned.apk"
 
           New-Item -ItemType Directory -Force -Path "../build_output"
-          Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" | Copy-Item -Destination "../build_output/"
+          Move-Item "unsigned-aligned.apk" "../build_output/app-release.apk" -Force
       # ==========================================
       # סיום והעלאת קבצים
       # ==========================================
