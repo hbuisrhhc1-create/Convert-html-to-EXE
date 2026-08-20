@@ -1,4 +1,4 @@
-name: Universal Cross-Platform App Builder (Pro Enhanced)
+name: Universal Cross-Platform App Builder (Pro Final)
 
 on:
   workflow_dispatch:
@@ -101,7 +101,6 @@ jobs:
           $appVersion = "${{ github.event.inputs.app_version }}"
           $appName = "${{ github.event.inputs.app_name }}"
 
-          # עריכת קובץ ה-.csproj בצורה מבוססת XML (בטוחה לגמרי)
           $csprojPath = "UniversalAppProject.csproj"
           [xml]$xml = Get-Content $csprojPath
           $xml.Project.PropertyGroup[0].OutputType = "WinExe"
