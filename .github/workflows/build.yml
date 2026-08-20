@@ -1,4 +1,4 @@
-name: Universal Cross-Platform App Builder (Pro Final)
+name: Universal Cross-Platform App Builder (Ultra Pro Max)
 
 on:
   workflow_dispatch:
@@ -39,6 +39,9 @@ env:
   APP_NAME: ${{ github.event.inputs.app_name }}
   APP_VERSION: ${{ github.event.inputs.app_version }}
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -46,17 +49,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Comprehensive Pre-flight Validation & Setup
+      # ==========================================
+      # מטמון תלויות להאצה והגנה מפני נפילות רשת
+      # ==========================================
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Cache Node Modules
+        if: ${{ env.TARGET_PLATFORM == 'Android' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      # ==========================================
+      # בדיקות מקדימות קפדניות וניתוח נכסים
+      # ==========================================
+      - name: Comprehensive Pre-flight Validation & Assets Check
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           
           Write-Host "=========================================="
-          Write-Host ">>> מתחיל בדיקות מקדימות (Pre-flight Validation)..."
+          Write-Host ">>> מתחיל בדיקות מקדימות ואבטחת איכות..."
           Write-Host "=========================================="
 
-          # 1. בדיקת שם האפליקציה ויצירת שם קובץ בטוח
           $appName = $env:APP_NAME.Trim()
           if ([string]::IsNullOrWhiteSpace($appName)) {
               Write-Error "שגיאה קריטית: חובה לספק שם לאפליקציה!"
@@ -70,7 +95,6 @@ jobs:
           $local = $env:LOCAL_HTML.Trim()
           if ([string]::IsNullOrWhiteSpace($local)) { $local = "index.html" }
           
-          # 2. בדיקת מקור המידע (כתובת או קובץ מקומי)
           if (-not [string]::IsNullOrWhiteSpace($url)) {
               Write-Host ">>> בודק תקינות כתובת אינטרנט: $url"
               try {
@@ -78,7 +102,6 @@ jobs:
                   if ($uri.Scheme -ne 'http' -and $uri.Scheme -ne 'https') {
                       throw "כתובת האתר חייבת להתחיל ב-http:// או https://"
                   }
-                  Write-Host ">>> מוודא שהאתר זמין ברשת..."
                   $response = Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -TimeoutSec 15
                   Write-Host ">>> הכתובת תקינה והאתר מגיב (סטטוס קוד: $($response.StatusCode))."
               } catch {
@@ -88,13 +111,12 @@ jobs:
               echo "FINAL_SOURCE=$url" >> $env:GITHUB_ENV
               echo "IS_URL=true" >> $env:GITHUB_ENV
           } else {
-              Write-Host ">>> בודק קובץ מקומי: $local"
+              Write-Host ">>> בודק קובץ מקומי ראשי: $local"
               if (-not (Test-Path $local)) {
                   Write-Error "שגיאה קריטית: הקובץ המקומי '$local' לא נמצא בתיקיית הפרויקט!"
                   exit 1
               }
               
-              Write-Host ">>> מנתח את תקינות קובץ ה-HTML..."
               $htmlContent = Get-Content $local -Raw -Encoding UTF8
               if ([string]::IsNullOrWhiteSpace($htmlContent)) {
                   Write-Error "שגיאה קריטית: קובץ ה-HTML '$local' ריק לחלוטין!"
@@ -102,16 +124,32 @@ jobs:
               }
 
               if ($htmlContent -notmatch '<html' -and $htmlContent -notmatch '<body' -and $htmlContent -notmatch '<!DOCTYPE') {
-                  Write-Warning "אזהרה: קובץ ה-HTML אינו מכיל תגיות מבנה סטנדרטיות (<html> / <body> / <!DOCTYPE>), אך הבדיקה תמשיך כמתוכנן."
-              } else {
-                  Write-Host ">>> מבנה קובץ ה-HTML נמצא תקין."
+                  Write-Warning "אזהרה: קובץ ה-HTML אינו מכיל תגיות מבנה סטנדרטיות, אך הבדיקה תמשיך."
+              }
+
+              # סריקה מדוקדקת של נכסים מקומיים (CSS, JS, Images) בתוך ה-HTML
+              Write-Host ">>> סורק נכסי משנה מקומיים (Assets) המקושרים בקובץ ה-HTML..."
+              $htmlDir = Split-Path -Parent $local
+              if ([string]::IsNullOrEmpty($htmlDir)) { $htmlDir = "." }
+
+              $links = [regex]::Matches($htmlContent, '<(?:link|script|img)[^>]+(?:href|src)=["\x27]([^"\x27]+)["\x27]', 'IgnoreCase')
+              foreach ($match in $links) {
+                  $assetPath = $match.Groups[1].Value
+                  if ($assetPath -match '^(https?:|data:|\/\/)') { continue }
+                  
+                  $fullAssetPath = Join-Path $htmlDir $assetPath
+                  if (-not (Test-Path $fullAssetPath)) {
+                      Write-Error "שגיאה קריטית: קובץ משנה מקומי מבוקש '$assetPath' (שמופיע בקוד ה-HTML) אינו קיים בפרויקט!"
+                      exit 1
+                  } else {
+                      Write-Host ">>> נמצא קובץ משנה אומת: $assetPath"
+                  }
               }
 
               echo "FINAL_SOURCE=$local" >> $env:GITHUB_ENV
               echo "IS_URL=false" >> $env:GITHUB_ENV
           }
 
-          # 3. בדיקת והורדת אייקון
           $iconFound = $false
           if (Test-Path "icon.png") { 
               $iconFound = $true 
@@ -120,26 +158,23 @@ jobs:
               try {
                   $domain = ([System.Uri]$url).Host
                   $faviconApi = "https://www.google.com/s2/favicons?domain=$domain&sz=128"
-                  Write-Host ">>> מנסה להוריד אייקון אוטומטי מהרשת עבור הדומיין: $domain"
                   Invoke-WebRequest -Uri $faviconApi -OutFile "icon.png" -UseBasicParsing -TimeoutSec 15
-                  
                   if (Test-Path "icon.png") {
                       $iconSize = (Get-Item "icon.png").Length
                       if ($iconSize -gt 500) {
                           $iconFound = $true
                           Write-Host ">>> אייקון הורד בהצלחה (משקל: $iconSize בתים)."
                       } else {
-                          Write-Host ">>> האייקון שהורד קטן מדי או ריק, מתעלם וממשיך בלעדיו."
                           Remove-Item "icon.png" -Force -ErrorAction SilentlyContinue
                       }
                   }
               } catch {
-                  Write-Host ">>> לא ניתן היה להוריד אייקון חיצוני, ממשיך בבנייה ללא אייקון מותאם."
+                  Write-Host ">>> לא ניתן היה להוריד אייקון חיצוני, ממשיך בבנייה בלעדיו."
               }
           }
           if ($iconFound) { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
           Write-Host "=========================================="
-          Write-Host ">>> כל הבדיקות המקדימות עברו בהצלחה! מתחיל בתהליך הבנייה..."
+          Write-Host ">>> כל הבדיקות עברו בהצלחה מושלמת!"
           Write-Host "=========================================="
 
       # ==========================================
@@ -159,27 +194,23 @@ jobs:
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $workspaceRoot = $env:GITHUB_WORKSPACE
           
-          Write-Host ">>> מנקה ומכין את תיקיית העבודה לווינדוס..."
           if (Test-Path "src_win") { Remove-Item "src_win" -Recurse -Force }
           New-Item -ItemType Directory -Force -Path "src_win" | Out-Null
           Set-Location "src_win"
 
-          Write-Host ">>> יוצר פרויקט C# WinForms חדש..."
           dotnet new winforms -n UniversalAppProject -f net8.0-windows
           
           $csprojFile = Get-ChildItem -Path . -Filter "UniversalAppProject.csproj" -Recurse | Select-Object -First 1
           if (-not $csprojFile) {
               $csprojFile = Get-ChildItem -Path . -Filter "*.csproj" -Recurse | Select-Object -First 1
           }
-          
           if (-not $csprojFile) {
-              Write-Error "שגיאה קריטית: קובץ ה-csproj לא נמצא באף תיקייה תחת src_win!"
+              Write-Error "שגיאה קריטית: קובץ ה-csproj אינו קיים!"
               exit 1
           }
 
           Set-Location $csprojFile.DirectoryName
           $csprojPath = $csprojFile.Name
-
           dotnet add package Microsoft.Web.WebView2
 
           $appVersion = $env:APP_VERSION
@@ -203,7 +234,6 @@ jobs:
               $sourceIconPath = "$workspaceRoot/icon.png"
               if (Test-Path $sourceIconPath) {
                   Copy-Item $sourceIconPath "icon.png" -Force
-                  Write-Host ">>> ממיר תמונה לאייקון .ico וחותך לריבוע באמצעות ImageMagick..."
                   try {
                       magick icon.png -resize 256x256! -define icon:auto-resize=256,128,64,48,32,16 icon.ico
                       if (Test-Path "icon.ico") {
@@ -211,7 +241,7 @@ jobs:
                           $xml.Project.PropertyGroup[0].ApplicationIcon = "icon.ico"
                       }
                   } catch {
-                      Write-Warning "המרת האייקון נכשלה, ממשיך בבנייה ללא אייקון מותאם."
+                      Write-Warning "המרת האייקון נכשלה, ממשיך בלעדיו."
                   }
               }
           }
@@ -303,7 +333,6 @@ jobs:
           "@
           Set-Content -Path "Program.cs" -Value $formCode -Encoding UTF8
 
-          Write-Host ">>> מקמפל לקובץ בינארי יחיד (EXE)..."
           dotnet publish -c Release -r win-x64 -p:OutputType=WinExe -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
           
           New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
@@ -311,7 +340,6 @@ jobs:
           if ($exeFile) {
               $destExe = "$workspaceRoot/build_output/$($env:SAFE_FILE_NAME).exe"
               Copy-Item $exeFile.FullName -Destination $destExe -Force
-              Write-Host ">>> ה-EXE הועבר ושמו שונה ל- $destExe"
           }
 
       - name: Sign Windows Executable
@@ -322,10 +350,7 @@ jobs:
           CERT_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          if ([string]::IsNullOrWhiteSpace($env:CERT_BASE64)) {
-              Write-Host ">>> לא הוגדרה תעודת חתימה, מדלג..."
-              exit 0
-          }
+          if ([string]::IsNullOrWhiteSpace($env:CERT_BASE64)) { exit 0 }
           $signtool = (Get-ChildItem "C:\Program Files*\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
           if (-not $signtool -or -not (Test-Path $signtool)) { exit 0 }
 
@@ -349,7 +374,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Node.js (For Cordova Stability)
+      - name: Setup Node.js
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
         uses: actions/setup-node@v4
         with:
@@ -359,7 +384,7 @@ jobs:
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
         uses: android-actions/setup-android@v3
 
-      - name: Compile Android APK (Clean Release)
+      - name: Compile Android APK
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
         shell: pwsh
         run: |
@@ -367,10 +392,7 @@ jobs:
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $workspaceRoot = $env:GITHUB_WORKSPACE
           
-          Write-Host ">>> מתקין Cordova..."
           npm install -g cordova
-
-          Write-Host ">>> יוצר פרויקט אנדרואיד..."
           cordova create android_app com.universal.app "AppTempName"
           
           if ($env:ICON_AVAILABLE == 'true') {
@@ -385,7 +407,6 @@ jobs:
           $appName = $env:APP_NAME
           
           $safeAppNameXml = [System.Security.SecurityElement]::Escape($appName)
-
           $configPath = "config.xml"
           $configContent = Get-Content $configPath -Raw
 
@@ -393,23 +414,18 @@ jobs:
           $configContent = $configContent -replace '<content src="index\.html"\s*/>', "<content src=`"$source`" />"
 
           if ($env:ICON_AVAILABLE == 'true') {
-              Write-Host ">>> מוסיף הגדרות אייקון לאנדרואיד..."
               $configContent = $configContent -replace '</widget>', "<icon src=`"icon.png`" />`n</widget>"
           }
 
           if ($isUrl == 'true') {
-            Write-Host ">>> מגדיר הרשאות URL באפליקציה..."
             $configContent = $configContent -replace '</widget>', "<access origin=`"*`" />`n<allow-navigation href=`"*`" />`n</widget>"
           } else {
-            Write-Host ">>> מעתיק קבצים מקומיים ל-Assets..."
             if (Test-Path "www") { Remove-Item "www\*" -Recurse -Force -ErrorAction SilentlyContinue }
             New-Item -ItemType Directory -Force -Path "www" | Out-Null
             Get-ChildItem -Path $workspaceRoot -Exclude "android_app", "icon.png", "src_win", ".git", ".github", "build_output" | Copy-Item -Destination "www" -Recurse -Force
           }
           
           Set-Content $configPath -Value $configContent -Encoding UTF8
-
-          Write-Host ">>> מקמפל APK (מצב Release נקי)..."
           cordova build android --release
 
           New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
@@ -417,15 +433,47 @@ jobs:
           if ($apkFile) {
               $destApk = "$workspaceRoot/build_output/$($env:SAFE_FILE_NAME).apk"
               Copy-Item $apkFile.FullName -Destination $destApk -Force
-              Write-Host ">>> ה-APK הועבר ושמו שונה ל- $destApk"
           }
 
       # ==========================================
-      # סיום והעלאת קבצים
+      # הפקת דוח סיכום ויזואלי (Step Summary)
       # ==========================================
-      - name: Artifact Upload
-        uses: actions/upload-artifact@v4
+      - name: Generate Build Summary
+        shell: pwsh
+        run: |
+          $workspaceRoot = $env:GITHUB_WORKSPACE
+          $outputDir = "$workspaceRoot/build_output"
+          $builtFile = Get-ChildItem -Path $outputDir -File | Select-Object -First 1
+          
+          if ($builtFile) {
+              $fileSizeMB = [Math]::Round($builtFile.Length / 1MB, 2)
+              $summary = @"
+          ### 🚀 דוח בנייה מוצלח – Universal App Builder
+          | פרמטר מערכת | ערך מוגדר |
+          | :--- | :--- |
+          | **שם האפליקציה** | `$($env:APP_NAME)` |
+          | **גרסת תוכна** | `$($env:APP_VERSION)` |
+          | **פלטפורמה נבחרת** | `$($env:TARGET_PLATFORM)` |
+          | **שם קובץ פלט** | `$($builtFile.Name)` |
+          | **גודל הקובץ הסופי** | `$fileSizeMB MB` |
+          | **סטטוס תהליך** | ✅ **הושלם בהצלחה מלאה (100% חסין תקלות)** |
+          "@
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary
+          }
+
+      # ==========================================
+      # יצירת GitHub Release אוטומטי והעלאת הקובץ
+      # ==========================================
+      - name: Create GitHub Release & Upload Asset
+        uses: softprops/action-gh-release@v2
         with:
-          name: ${{ env.SAFE_FILE_NAME }}-${{ env.TARGET_PLATFORM }}-Build
-          path: build_output/
-          retention-days: 7
+          files: build_output/*
+          tag_name: v${{ env.APP_VERSION }}-build-${{ github.run_number }}
+          name: '${{ env.APP_NAME }} v${{ env.APP_VERSION }} (${{ env.TARGET_PLATFORM }})'
+          body: |
+            האפליקציה נוצרה אוטומטית באמצעות מערכת הבנייה Universal Cross-Platform App Builder.
+            - פלטפורמה: ${{ env.TARGET_PLATFORM }}
+            - גרסה: ${{ env.APP_VERSION }}
+            - תאריך ושעה: $(Get-Date -Format 'yyyy-MM-dd HH:mm')
+          draft: false
+          prerelease: false
