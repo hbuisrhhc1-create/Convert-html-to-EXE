@@ -100,7 +100,7 @@ jobs:
           if (Test-Path "icon.png") { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
 
       # ==========================================
-      # בניית Windows עם מנוע אנליזה אוטונומי
+      # בניית Windows עם מטריצת התאוששות רב-שלבית
       # ==========================================
       - name: Setup .NET SDK
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
@@ -108,7 +108,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Compile Windows EXE with Autonomous Adaptive Engine
+      - name: Compile Windows EXE with Multi-Strategy Autonomous Engine
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
         shell: pwsh
         run: |
@@ -130,47 +130,51 @@ jobs:
               }
           }
 
-          function Invoke-AutonomousEngine {
+          function Invoke-MultiStrategyEngine {
               param([scriptblock]$ScriptBlock, [string]$ContextName)
-              $maxRetries = 3
-              $attempt = 1
+              $maxStrategies = 3
+              $currentStrategy = 1
 
-              while ($attempt -le $maxRetries) {
+              while ($currentStrategy -le $maxStrategies) {
                   try {
-                      Write-Host ">>> מריץ פעולה ($($ContextName)) - ניסיון $attempt/$maxRetries..."
+                      Write-Host ">>> [$ContextName] הפעלת אסטרטגיה מספר $currentStrategy/$max..."
                       & $ScriptBlock
-                      Write-Host ">>> פעולה הצליחה!"
+                      Write-Host ">>> [$ContextName] פעולה הסתיימה בהצלחה!"
                       return
                   } catch {
                       $errorMessage = $_.Exception.Message
-                      Write-Warning "⚠️ זוהתה שגיאה ברובד $($ContextName): $errorMessage"
+                      Write-Warning "⚠️ שגיאה ברובד $ContextName (אסטרטגיה $currentStrategy): $errorMessage"
 
-                      if ($attempt -eq $maxRetries) {
-                          Write-Error "❌ כל ניסיונות ההתאוששות האוטונומית כשלו עבור $($ContextName)."
+                      if ($currentStrategy -eq $maxStrategies) {
+                          Write-Error "❌ כל $maxStrategies האסטרטגיות האוטונומיות מוצו עבור $ContextName. נכשל."
                           throw $_
                       }
 
-                      Write-Host ">>> מנוע ה-AI האוטונומי מנתח את השגיאה ומתאים פתרון..."
+                      Write-Host ">>> מנוע ה-AI מפעיל את אסטרטגיית התיקון הבאה בסדרה..."
                       
-                      if ($errorMessage -match "NuGet|package|restore|dependency|NU") {
-                          Write-Host ">>> זיהוי שגיאת חבילות/NuGet. מנקה קאש חבילות ומאפס..."
-                          dotnet nuget locals all --clear
-                          Remove-LockedFolderForce "obj"
-                      }
-                      elseif ($errorMessage -match "Access Denied|locked|used by another process") {
-                          Write-Host ">>> זיהוי בעיית נעילת קבצים/הרשאות. ממתין ומשחרר תהליכים..."
-                          Stop-Process -Name "dotnet", "msbuild" -Force -ErrorAction SilentlyContinue
-                          Start-Sleep -Seconds 5
-                      }
-                      else {
-                          Write-Host ">>> שגיאה כללית מבנית. מבצע איפוס עמוק של סביבת העבודה..."
-                          Remove-LockedFolderForce "obj"
-                          Remove-LockedFolderForce "bin"
-                          Remove-LockedFolderForce "src_win"
+                      switch ($currentStrategy) {
+                          1 {
+                              Write-Host ">>> [אסטרטגיה 1] שחרור תהליכים נעולים וניקוי בסיסי..."
+                              Stop-Process -Name "dotnet", "msbuild" -Force -ErrorAction SilentlyContinue
+                              Remove-LockedFolderForce "obj"
+                              Start-Sleep -Seconds 3
+                          }
+                          2 {
+                              Write-Host ">>> [אסטרטגיה 2] איפוס מטמוני NuGet ורענון תלויות מלא..."
+                              dotnet nuget locals all --clear
+                              Remove-LockedFolderForce "obj"
+                              Remove-LockedFolderForce "bin"
+                          }
+                          3 {
+                              Write-Host ">>> [אסטרטגיה 3] איפוס עמוק: מחיקת שלד הפרויקט ובנייה מחדש מאפס..."
+                              Remove-LockedFolderForce "obj"
+                              Remove-LockedFolderForce "bin"
+                              Remove-LockedFolderForce "src_win"
+                          }
                       }
 
-                      $attempt++
-                      Start-Sleep -Seconds 2
+                      $currentStrategy++
+                      Start-Sleep -Seconds 3
                   }
               }
           }
@@ -309,7 +313,7 @@ jobs:
               }
           }
 
-          Invoke-AutonomousEngine -ScriptBlock $BuildWindowsLogic -ContextName "Windows Compilation Engine"
+          Invoke-MultiStrategyEngine -ScriptBlock $BuildWindowsLogic -ContextName "Windows Compilation Engine"
 
       - name: Sign Windows Executable
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
@@ -334,7 +338,7 @@ jobs:
           Remove-Item $certPath -Force -ErrorAction SilentlyContinue
 
       # ==========================================
-      # בניית Android עם מנוע אנליזה אוטונומי
+      # בניית Android עם מטריצת התאוששות רב-שלבית
       # ==========================================
       - name: Setup Java SDK
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
@@ -353,7 +357,7 @@ jobs:
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
         uses: android-actions/setup-android@v3
 
-      - name: Compile Android APK with Autonomous Adaptive Engine
+      - name: Compile Android APK with Multi-Strategy Autonomous Engine
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
         shell: pwsh
         run: |
@@ -375,37 +379,43 @@ jobs:
               }
           }
 
-          function Invoke-AndroidAutonomousEngine {
+          function Invoke-AndroidMultiStrategyEngine {
               param([scriptblock]$ScriptBlock, [string]$ContextName)
-              $maxRetries = 3
-              $attempt = 1
+              $maxStrategies = 3
+              $currentStrategy = 1
 
-              while ($attempt -le $maxRetries) {
+              while ($currentStrategy -le $maxStrategies) {
                   try {
-                      Write-Host ">>> מריץ פעולה לאנדרואיד ($($ContextName)) - ניסיון $attempt/$maxRetries..."
+                      Write-Host ">>> [$ContextName] הפעלת אסטרטגיה מספר $currentStrategy/$max..."
                       & $ScriptBlock
-                      Write-Host ">>> פעולה הצליחה!"
+                      Write-Host ">>> [$ContextName] פעולה הסתיימה בהצלחה!"
                       return
                   } catch {
                       $errorMessage = $_.Exception.Message
-                      Write-Warning "⚠️ שגיאה באנדרואיד ברובד $($ContextName): $errorMessage"
+                      Write-Warning "⚠️ שגיאה באנדרואיד ברובד $ContextName (אסטרטגיה $currentStrategy): $errorMessage"
 
-                      if ($attempt -eq $maxRetries) {
-                          Write-Error "❌ ניסיונות התיקון לאנדרואיד מוצו."
+                      if ($currentStrategy -equal $maxStrategies) {
+                          Write-Error "❌ כל אסטרטגיות התיקון לאנדרואיד מוצו."
                           throw $_
                       }
 
-                      Write-Host ">>> מנוע ה-AI מנתח שגיאת אנדרואיד ומפעיל התאוששות..."
-                      if ($errorMessage -match "npm|cache|EACCES|EPERM") {
-                          npm cache clean --force
-                      }
-                      else {
-                          Remove-LockedFolderForce "platforms"
-                          Remove-LockedFolderForce "plugins"
-                          Remove-LockedFolderForce "android_app"
+                      Write-Host ">>> מנוע ה-AI עובר לאסטרטגיית התיקון הבאה..."
+                      switch ($currentStrategy) {
+                          1 {
+                              npm cache clean --force
+                          }
+                          2 {
+                              Remove-LockedFolderForce "platforms"
+                              Remove-LockedFolderForce "plugins"
+                          }
+                          3 {
+                              Remove-LockedFolderForce "platforms"
+                              Remove-LockedFolderForce "plugins"
+                              Remove-LockedFolderForce "android_app"
+                          }
                       }
 
-                      $attempt++
+                      $currentStrategy++
                       Start-Sleep -Seconds 3
                   }
               }
@@ -463,7 +473,7 @@ jobs:
               }
           }
 
-          Invoke-AndroidAutonomousEngine -ScriptBlock $BuildAndroidLogic -ContextName "Android Build Engine"
+          Invoke-AndroidMultiStrategyEngine -ScriptBlock $BuildAndroidLogic -ContextName "Android Build Engine"
 
       # ==========================================
       # סיכום והעלאה
