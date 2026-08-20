@@ -1,4 +1,4 @@
-name: Universal Cross-Platform App Builder (Ultra Pro Max)
+name: Universal Cross-Platform App Builder (Ultra Self-Healing Pro)
 
 on:
   workflow_dispatch:
@@ -50,7 +50,7 @@ jobs:
         uses: actions/checkout@v4
 
       # ==========================================
-      # מטמון תלויות להאצה והגנה מפני נפילות רשת
+      # מטמון תלויות חכם
       # ==========================================
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -103,7 +103,7 @@ jobs:
                       throw "כתובת האתר חייבת להתחיל ב-http:// או https://"
                   }
                   $response = Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -TimeoutSec 15
-                  Write-Host ">>> הכתובת תקינה והאתר מגיב (סטטוס קוד: $($response.StatusCode))."
+                  Write-Host ">>> הכתובת תקינה והאתר מגיב."
               } catch {
                   Write-Error "שגיאה: כתובת האתר שהוזנה אינה תקינה או שהשרת אינו זמין: $_"
                   exit 1
@@ -123,11 +123,6 @@ jobs:
                   exit 1
               }
 
-              if ($htmlContent -notmatch '<html' -and $htmlContent -notmatch '<body' -and $htmlContent -notmatch '<!DOCTYPE') {
-                  Write-Warning "אזהרה: קובץ ה-HTML אינו מכיל תגיות מבנה סטנדרטיות, אך הבדיקה תמשיך."
-              }
-
-              # סריקה מדוקדקת של נכסים מקומיים (CSS, JS, Images) בתוך ה-HTML
               Write-Host ">>> סורק נכסי משנה מקומיים (Assets) המקושרים בקובץ ה-HTML..."
               $htmlDir = Split-Path -Parent $local
               if ([string]::IsNullOrEmpty($htmlDir)) { $htmlDir = "." }
@@ -139,10 +134,8 @@ jobs:
                   
                   $fullAssetPath = Join-Path $htmlDir $assetPath
                   if (-not (Test-Path $fullAssetPath)) {
-                      Write-Error "שגיאה קריטית: קובץ משנה מקומי מבוקש '$assetPath' (שמופיע בקוד ה-HTML) אינו קיים בפרויקט!"
+                      Write-Error "שגיאה קריטית: קובץ משנה מבוקש '$assetPath' אינו קיים בפרויקט!"
                       exit 1
-                  } else {
-                      Write-Host ">>> נמצא קובץ משנה אומת: $assetPath"
                   }
               }
 
@@ -153,32 +146,19 @@ jobs:
           $iconFound = $false
           if (Test-Path "icon.png") { 
               $iconFound = $true 
-              Write-Host ">>> נמצא קובץ icon.png מקומי בפרויקט."
           } elseif (-not [string]::IsNullOrWhiteSpace($url)) {
               try {
                   $domain = ([System.Uri]$url).Host
                   $faviconApi = "https://www.google.com/s2/favicons?domain=$domain&sz=128"
                   Invoke-WebRequest -Uri $faviconApi -OutFile "icon.png" -UseBasicParsing -TimeoutSec 15
-                  if (Test-Path "icon.png") {
-                      $iconSize = (Get-Item "icon.png").Length
-                      if ($iconSize -gt 500) {
-                          $iconFound = $true
-                          Write-Host ">>> אייקון הורד בהצלחה (משקל: $iconSize בתים)."
-                      } else {
-                          Remove-Item "icon.png" -Force -ErrorAction SilentlyContinue
-                      }
-                  }
-              } catch {
-                  Write-Host ">>> לא ניתן היה להוריד אייקון חיצוני, ממשיך בבנייה בלעדיו."
-              }
+                  if ((Get-Item "icon.png").Length -gt 500) { $iconFound = $true }
+              } catch { }
           }
           if ($iconFound) { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
-          Write-Host "=========================================="
           Write-Host ">>> כל הבדיקות עברו בהצלחה מושלמת!"
-          Write-Host "=========================================="
 
       # ==========================================
-      # מסלול א': בניית תוכנת Windows (EXE)
+      # פונקציות עזר מתקדמות לטיפול ותיקון תיקיות
       # ==========================================
       - name: Setup .NET SDK
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
@@ -186,159 +166,210 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Compile Windows EXE
+      - name: Compile Windows EXE with Ultra Self-Healing
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $workspaceRoot = $env:GITHUB_WORKSPACE
-          
-          if (Test-Path "src_win") { Remove-Item "src_win" -Recurse -Force }
-          New-Item -ItemType Directory -Force -Path "src_win" | Out-Null
-          Set-Location "src_win"
 
-          Write-Host ">>> יוצר פרויקט C# WinForms ישירות בתיקיית העבודה..."
-          dotnet new winforms -o . --force
-          
-          $csprojFile = Get-ChildItem -Path . -Filter "*.csproj" | Select-Object -First 1
-          if (-not $csprojFile) {
-              Write-Error "שגיאה קריטית: קובץ ה-csproj אינו קיים!"
-              exit 1
+          # פונקציה אבסולוטית למחיקת תיקיות נעולות עם ניסיונות חוזרים ואיפוס הרשאות
+          function Remove-LockedFolderForce {
+              param([string]$FolderPath)
+              if (Test-Path $FolderPath) {
+                  Write-Host ">>> מנקה באגרסיביות את התיקייה: $FolderPath"
+                  
+                  # עצירת תהליכים עקשניים שעלולים לנעול קבצים
+                  Stop-Process -Name "dotnet", "msbuild", "signtool" -Force -ErrorAction SilentlyContinue
+                  Start-Sleep -Seconds 2
+
+                  # הסרת מאפייני Read-Only מכל הקבצים בתיקייה
+                  Get-ChildItem -Path $FolderPath -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                      try { $_.Attributes = 'Normal' } catch { }
+                  }
+
+                  # לולאת ניסיונות מחיקה (Retry Mechanism) למניעת בעיות תזמון של ווינדוס
+                  $deleted = $false
+                  for ($attempt = 1; $attempt -le 4; $attempt++) {
+                      try {
+                          Remove-Item $FolderPath -Recurse -Force -ErrorAction Stop
+                          $deleted = $true
+                          Write-Host ">>> התיקייה $FolderPath נמחקה בהצלחה."
+                          break
+                      } catch {
+                          Write-Warning "ניסיון מחיקה מספר $attempt נכשל עבור $FolderPath. ממתין 3 שניות ומנסה שוב..."
+                          Start-Sleep -Seconds 3
+                      }
+                  }
+                  if (-not $deleted) {
+                      throw "לא ניתן היה למחוק את התיקייה $FolderPath עקב נעילת מערכת עקשנית."
+                  }
+              }
           }
-
-          $csprojPath = $csprojFile.Name
-          Write-Host ">>> נמצא קובץ פרויקט: $csprojPath"
-          dotnet add package Microsoft.Web.WebView2
-
-          $appVersion = $env:APP_VERSION
-          $appName = $env:APP_NAME
-
-          [xml]$xml = Get-Content $csprojPath
-          $xml.Project.PropertyGroup[0].OutputType = "WinExe"
           
-          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Version")) | Out-Null
-          $xml.Project.PropertyGroup[0].Version = $appVersion
-          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("AssemblyVersion")) | Out-Null
-          $xml.Project.PropertyGroup[0].AssemblyVersion = $appVersion
-          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("FileVersion")) | Out-Null
-          $xml.Project.PropertyGroup[0].FileVersion = $appVersion
-          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Product")) | Out-Null
-          $xml.Project.PropertyGroup[0].Product = $appName
-          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Company")) | Out-Null
-          $xml.Project.PropertyGroup[0].Company = "ינון דרייב"
-
-          if ($env:ICON_AVAILABLE == 'true') {
-              $sourceIconPath = "$workspaceRoot/icon.png"
-              if (Test-Path $sourceIconPath) {
-                  Copy-Item $sourceIconPath "icon.png" -Force
+          function Invoke-WithSelfHealing {
+              param([scriptblock]$PrimaryAction, [scriptblock]$RecoveryAction, [string]$TaskName)
+              try {
+                  Write-Host ">>> מבצע פעולה: $TaskName..."
+                  & $PrimaryAction
+                  Write-Host ">>> $TaskName הושלם בהצלחה."
+              } catch {
+                  Write-Warning "⚠️ זוהתה תקלה ב-$TaskName: $_"
+                  Write-Host ">>> מפעיל מנגנון תיקון עצמי מתקדם (Ultra Self-Healing)..."
                   try {
-                      magick icon.png -resize 256x256! -define icon:auto-resize=256,128,64,48,32,16 icon.ico
-                      if (Test-Path "icon.ico") {
-                          $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("ApplicationIcon")) | Out-Null
-                          $xml.Project.PropertyGroup[0].ApplicationIcon = "icon.ico"
-                      }
+                      & $RecoveryAction
+                      Write-Host ">>> תיקון עצמי בוצע בהצלחה. מריץ מחדש את הפעולה..."
+                      & $PrimaryAction
+                      Write-Host ">>> הפעולה הצליחה לאחר ההתאוששות!"
                   } catch {
-                      Write-Warning "המרת האייקון נכשלה, ממשיך בלעדיו."
+                      Write-Error "❌ מנגנון התיקון העצמי נכשל לחלוטין עבור $TaskName: $_"
+                      exit 1
                   }
               }
           }
-          
-          $xml.Save((Get-Item $csprojPath).FullName)
 
-          $safeAppName = $appName -replace '"', '\"'
-          $safeSource = $env:FINAL_SOURCE -replace '"', '\"' -replace '\\', '\\\\'
-          $isUrl = $env:IS_URL
+          $BuildWindows = {
+              Remove-LockedFolderForce "src_win"
+              New-Item -ItemType Directory -Force -Path "src_win" | Out-Null
+              Set-Location "src_win"
 
-          $formCode = @"
-          using System;
-          using System.IO;
-          using System.Windows.Forms;
-          using System.Diagnostics;
-          using Microsoft.Web.WebView2.Core;
+              Write-Host ">>> יוצר פרויקט C# WinForms..."
+              dotnet new winforms -o . --force
+              
+              $csprojFile = Get-ChildItem -Path . -Filter "*.csproj" | Select-Object -First 1
+              if (-not $csprojFile) { throw "קובץ ה-csproj אינו קיים!" }
 
-          namespace UniversalAppProject
-          {
-              static class Program
-              {
-                  [STAThread]
-                  static void Main()
-                  {
-                      Application.EnableVisualStyles();
-                      Application.SetCompatibleTextRenderingDefault(false);
-                      Application.Run(new MainForm());
+              $csprojPath = $csprojFile.Name
+              dotnet add package Microsoft.Web.WebView2
+
+              $appVersion = $env:APP_VERSION
+              $appName = $env:APP_NAME
+
+              [xml]$xml = Get-Content $csprojPath
+              $xml.Project.PropertyGroup[0].OutputType = "WinExe"
+              $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Version")) | Out-Null
+              $xml.Project.PropertyGroup[0].Version = $appVersion
+              $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("AssemblyVersion")) | Out-Null
+              $xml.Project.PropertyGroup[0].AssemblyVersion = $appVersion
+              $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("FileVersion")) | Out-Null
+              $xml.Project.PropertyGroup[0].FileVersion = $appVersion
+              $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Product")) | Out-Null
+              $xml.Project.PropertyGroup[0].Product = $appName
+              $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("Company")) | Out-Null
+              $xml.Project.PropertyGroup[0].Company = "ינון דרייב"
+
+              if ($env:ICON_AVAILABLE == 'true') {
+                  $sourceIconPath = "$workspaceRoot/icon.png"
+                  if (Test-Path $sourceIconPath) {
+                      Copy-Item $sourceIconPath "icon.png" -Force
+                      try {
+                          magick icon.png -resize 256x256! -define icon:auto-resize=256,128,64,48,32,16 icon.ico
+                          if (Test-Path "icon.ico") {
+                              $xml.Project.PropertyGroup[0].AppendChild($xml.CreateElement("ApplicationIcon")) | Out-Null
+                              $xml.Project.PropertyGroup[0].ApplicationIcon = "icon.ico"
+                          }
+                      } catch { }
                   }
               }
+              $xml.Save((Get-Item $csprojPath).FullName)
 
-              public partial class MainForm : Form
+              $safeAppName = $appName -replace '"', '\"'
+              $safeSource = $env:FINAL_SOURCE -replace '"', '\"' -replace '\\', '\\\\'
+              $isUrl = $env:IS_URL
+
+              $formCode = @"
+              using System;
+              using System.IO;
+              using System.Windows.Forms;
+              using System.Diagnostics;
+              using Microsoft.Web.WebView2.Core;
+
+              namespace UniversalAppProject
               {
-                  private Microsoft.Web.WebView2.WinForms.WebView2? webView;
-
-                  public MainForm()
+                  static class Program
                   {
-                      this.Text = `"$safeAppName`";
-                      this.Width = 1024;
-                      this.Height = 768;
-                      this.StartPosition = FormStartPosition.CenterScreen;
-                      
-                      try
+                      [STAThread]
+                      static void Main()
                       {
-                          string? exePath = Process.GetCurrentProcess().MainModule?.FileName;
-                          if (!string.IsNullOrEmpty(exePath))
+                          Application.EnableVisualStyles();
+                          Application.SetCompatibleTextRenderingDefault(false);
+                          Application.Run(new MainForm());
+                      }
+                  }
+
+                  public partial class MainForm : Form
+                  {
+                      private Microsoft.Web.WebView2.WinForms.WebView2? webView;
+
+                      public MainForm()
+                      {
+                          this.Text = `"$safeAppName`";
+                          this.Width = 1024;
+                          this.Height = 768;
+                          this.StartPosition = FormStartPosition.CenterScreen;
+                          try
                           {
-                              this.Icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
+                              string? exePath = Process.GetCurrentProcess().MainModule?.FileName;
+                              if (!string.IsNullOrEmpty(exePath))
+                              {
+                                  this.Icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
+                              }
+                          }
+                          catch { }
+                          LoadWebView();
+                      }
+
+                      private async void LoadWebView()
+                      {
+                          webView = new Microsoft.Web.WebView2.WinForms.WebView2();
+                          webView.Dock = DockStyle.Fill;
+                          this.Controls.Add(webView);
+                          try
+                          {
+                              string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), `"$safeAppName`");
+                              var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                              await webView.EnsureCoreWebView2Async(env);
+                              string target = `"$safeSource`";
+                              bool isUrl = System.Convert.ToBoolean(`"$isUrl`".ToLower());
+                              if (isUrl) {
+                                  webView.CoreWebView2.Navigate(target);
+                              } else {
+                                  string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+                                  webView.CoreWebView2.SetVirtualHostNameToFolderMapping("app.local", exeDir, CoreWebView2HostResourceAccessKind.Allow);
+                                  string urlPath = target.Replace("\\", "/");
+                                  webView.CoreWebView2.Navigate(`"https://app.local/{urlPath}`");
+                              }
+                          }
+                          catch (Exception ex)
+                          {
+                              MessageBox.Show("שגיאה בטעינת האפליקציה: " + ex.Message, "שגיאה", MessageBoxButtons.OK, MessageBoxIcon.Error);
                           }
                       }
-                      catch { }
-
-                      LoadWebView();
-                  }
-
-                  private async void LoadWebView()
-                  {
-                      webView = new Microsoft.Web.WebView2.WinForms.WebView2();
-                      webView.Dock = DockStyle.Fill;
-                      this.Controls.Add(webView);
-                      
-                      try
-                      {
-                          string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), `"$safeAppName`");
-                          var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-                          await webView.EnsureCoreWebView2Async(env);
-                          
-                          string target = `"$safeSource`";
-                          bool isUrl = System.Convert.ToBoolean(`"$isUrl`".ToLower());
-
-                          if (isUrl) 
-                          {
-                              webView.CoreWebView2.Navigate(target);
-                          } 
-                          else 
-                          {
-                              string exeDir = AppDomain.CurrentDomain.BaseDirectory;
-                              webView.CoreWebView2.SetVirtualHostNameToFolderMapping("app.local", exeDir, CoreWebView2HostResourceAccessKind.Allow);
-                              string urlPath = target.Replace("\\", "/");
-                              webView.CoreWebView2.Navigate(`"https://app.local/{urlPath}`");
-                          }
-                      }
-                      catch (Exception ex)
-                      {
-                          MessageBox.Show("שגיאה בטעינת האפליקציה: " + ex.Message, "שגיאה", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                      }
                   }
               }
-          }
-          "@
-          Set-Content -Path "Program.cs" -Value $formCode -Encoding UTF8
+              "@
+              Set-Content -Path "Program.cs" -Value $formCode -Encoding UTF8
 
-          dotnet publish -c Release -r win-x64 -p:OutputType=WinExe -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
-          
-          New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
-          $exeFile = Get-ChildItem -Path "./final_publish" -Filter "*.exe" -File | Select-Object -First 1
-          if ($exeFile) {
-              $destExe = "$workspaceRoot/build_output/$($env:SAFE_FILE_NAME).exe"
-              Copy-Item $exeFile.FullName -Destination $destExe -Force
+              Write-Host ">>> מריץ תהליך קומפילציה מלא (Publish)..."
+              dotnet publish -c Release -r win-x64 -p:OutputType=WinExe -o ./final_publish --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+              
+              New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
+              $exeFile = Get-ChildItem -Path "./final_publish" -Filter "*.exe" -File | Select-Object -First 1
+              if ($exeFile) {
+                  Copy-Item $exeFile.FullName -Destination "$workspaceRoot/build_output/$($env:SAFE_FILE_NAME).exe" -Force
+              }
           }
+
+          $RecoverWindows = {
+              Write-Host ">>> מבצע ניקוי עמוק ואיפוס קאש NuGet ותיקיות בנייה..."
+              dotnet nuget locals all --clear
+              Remove-LockedFolderForce "obj"
+              Remove-LockedFolderForce "bin"
+              Remove-LockedFolderForce "src_win"
+          }
+
+          Invoke-WithSelfHealing -PrimaryAction $BuildWindows -RecoveryAction $RecoverWindows -TaskName "Windows App Build"
 
       - name: Sign Windows Executable
         if: ${{ env.TARGET_PLATFORM == 'Windows' }}
@@ -363,7 +394,7 @@ jobs:
           Remove-Item $certPath -Force -ErrorAction SilentlyContinue
 
       # ==========================================
-      # מסלול ב': בניית אפליקציית Android (APK)
+      # מסלול ב': בניית אפליקציית Android (APK) + תיקון עצמי
       # ==========================================
       - name: Setup Java SDK
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
@@ -382,59 +413,116 @@ jobs:
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
         uses: android-actions/setup-android@v3
 
-      - name: Compile Android APK
+      - name: Compile Android APK with Ultra Self-Healing
         if: ${{ env.TARGET_PLATFORM == 'Android' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $workspaceRoot = $env:GITHUB_WORKSPACE
-          
-          npm install -g cordova
-          cordova create android_app com.universal.app "AppTempName"
-          
-          if ($env:ICON_AVAILABLE == 'true') {
-              Copy-Item "$workspaceRoot/icon.png" "android_app/icon.png" -Force -ErrorAction SilentlyContinue
+
+          function Remove-LockedFolderForce {
+              param([string]$FolderPath)
+              if (Test-Path $FolderPath) {
+                  Write-Host ">>> מנקה באגרסיביות את התיקייה: $FolderPath"
+                  Stop-Process -Name "node", "java", "gradle" -Force -ErrorAction SilentlyContinue
+                  Start-Sleep -Seconds 2
+                  Get-ChildItem -Path $FolderPath -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                      try { $_.Attributes = 'Normal' } catch { }
+                  }
+                  for ($attempt = 1; $attempt -le 4; $attempt++) {
+                      try {
+                          Remove-Item $FolderPath -Recurse -Force -ErrorAction Stop
+                          break
+                      } catch {
+                          Start-Sleep -Seconds 3
+                      }
+                  }
+              }
           }
 
-          Set-Location android_app
-          cordova platform add android
-
-          $source = $env:FINAL_SOURCE
-          $isUrl = $env:IS_URL
-          $appName = $env:APP_NAME
-          
-          $safeAppNameXml = [System.Security.SecurityElement]::Escape($appName)
-          $configPath = "config.xml"
-          $configContent = Get-Content $configPath -Raw
-
-          $configContent = $configContent -replace '<name>AppTempName</name>', "<name>$safeAppNameXml</name>"
-          $configContent = $configContent -replace '<content src="index\.html"\s*/>', "<content src=`"$source`" />"
-
-          if ($env:ICON_AVAILABLE == 'true') {
-              $configContent = $configContent -replace '</widget>', "<icon src=`"icon.png`" />`n</widget>"
+          function Invoke-AndroidSelfHealing {
+              param([scriptblock]$PrimaryAction, [scriptblock]$RecoveryAction, [string]$TaskName)
+              try {
+                  Write-Host ">>> מבצע פעולה: $TaskName..."
+                  & $PrimaryAction
+                  Write-Host ">>> $TaskName הושלם בהצלחה."
+              } catch {
+                  Write-Warning "⚠️ זוהתה תקלה ב-$TaskName: $_"
+                  Write-Host ">>> מפעיל מנגנון תיקון עצמי לאנדרואיד..."
+                  try {
+                      & $RecoveryAction
+                      Write-Host ">>> תיקון עצמי בוצע. מריץ מחדש..."
+                      & $PrimaryAction
+                      Write-Host ">>> הפעולה הצליחה!"
+                  } catch {
+                      Write-Error "❌ מנגנון התיקון העצמי נכשל: $_"
+                      exit 1
+                  }
+              }
           }
 
-          if ($isUrl == 'true') {
-            $configContent = $configContent -replace '</widget>', "<access origin=`"*`" />`n<allow-navigation href=`"*`" />`n</widget>"
-          } else {
-            if (Test-Path "www") { Remove-Item "www\*" -Recurse -Force -ErrorAction SilentlyContinue }
-            New-Item -ItemType Directory -Force -Path "www" | Out-Null
-            Get-ChildItem -Path $workspaceRoot -Exclude "android_app", "icon.png", "src_win", ".git", ".github", "build_output" | Copy-Item -Destination "www" -Recurse -Force
-          }
-          
-          Set-Content $configPath -Value $configContent -Encoding UTF8
-          cordova build android --release
+          $BuildAndroid = {
+              Write-Host ">>> מתקין/מעדכן Cordova..."
+              npm install -g cordova
 
-          New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
-          $apkFile = Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" -File | Select-Object -First 1
-          if ($apkFile) {
-              $destApk = "$workspaceRoot/build_output/$($env:SAFE_FILE_NAME).apk"
-              Copy-Item $apkFile.FullName -Destination $destApk -Force
+              Remove-LockedFolderForce "android_app"
+              cordova create android_app com.universal.app "AppTempName"
+              
+              if ($env:ICON_AVAILABLE == 'true') {
+                  Copy-Item "$workspaceRoot/icon.png" "android_app/icon.png" -Force -ErrorAction SilentlyContinue
+              }
+
+              Set-Location android_app
+              cordova platform add android
+
+              $source = $env:FINAL_SOURCE
+              $isUrl = $env:IS_URL
+              $appName = $env:APP_NAME
+              
+              $safeAppNameXml = [System.Security.SecurityElement]::Escape($appName)
+              $configPath = "config.xml"
+              $configContent = Get-Content $configPath -Raw
+
+              $configContent = $configContent -replace '<name>AppTempName</name>', "<name>$safeAppNameXml</name>"
+              $configContent = $configContent -replace '<content src="index\.html"\s*/>', "<content src=`"$source`" />"
+
+              if ($env:ICON_AVAILABLE == 'true') {
+                  $configContent = $configContent -replace '</widget>', "<icon src=`"icon.png`" />`n</widget>"
+              }
+
+              if ($isUrl == 'true') {
+                $configContent = $configContent -replace '</widget>', "<access origin=`"*`" />`n<allow-navigation href=`"*`" />`n</widget>"
+              } else {
+                if (Test-Path "www") { Remove-Item "www\*" -Recurse -Force -ErrorAction SilentlyContinue }
+                New-Item -ItemType Directory -Force -Path "www" | Out-Null
+                Get-ChildItem -Path $workspaceRoot -Exclude "android_app", "icon.png", "src_win", ".git", ".github", "build_output" | Copy-Item -Destination "www" -Recurse -Force
+              }
+              
+              Set-Content $configPath -Value $configContent -Encoding UTF8
+              
+              Write-Host ">>> מקמפל APK במצב Release..."
+              cordova build android --release
+
+              New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
+              $apkFile = Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" -File | Select-Object -First 1
+              if ($apkFile) {
+                  Copy-Item $apkFile.FullName -Destination "$workspaceRoot/build_output/$($env:SAFE_FILE_NAME).apk" -Force
+              }
           }
+
+          $RecoverAndroid = {
+              Write-Host ">>> מנקה קאש npm ותיקיות פלטפורמה פגומות של אנדרואיד..."
+              npm cache clean --force
+              Remove-LockedFolderForce "platforms"
+              Remove-LockedFolderForce "plugins"
+              Remove-LockedFolderForce "android_app"
+          }
+
+          Invoke-AndroidSelfHealing -PrimaryAction $BuildAndroid -RecoveryAction $RecoverAndroid -TaskName "Android APK Build"
 
       # ==========================================
-      # הפקת דוח סיכום ויזואלי (Step Summary)
+      # הפקת דוח סיכום ויזואלי והעלאה ל-Release
       # ==========================================
       - name: Generate Build Summary
         shell: pwsh
@@ -446,7 +534,7 @@ jobs:
           if ($builtFile) {
               $fileSizeMB = [Math]::Round($builtFile.Length / 1MB, 2)
               $summary = @"
-          ### 🚀 דוח בנייה מוצלח – Universal App Builder
+          ### 🚀 דוח בנייה מוצלח – מוגן על ידי מנוע Ultra Self-Healing
           | פרמטר מערכת | ערך מוגדר |
           | :--- | :--- |
           | **שם האפליקציה** | `$($env:APP_NAME)` |
@@ -454,14 +542,11 @@ jobs:
           | **פלטפורמה נבחרת** | `$($env:TARGET_PLATFORM)` |
           | **שם קובץ פלט** | `$($builtFile.Name)` |
           | **גודל הקובץ הסופי** | `$fileSizeMB MB` |
-          | **סטטוס תהליך** | ✅ **הושלם בהצלחה מלאה (100% חסין תקלות)** |
+          | **סטטוס תהליך** | ✅ **הושלם בהצלחה מלאה עם הגנת מחיקה חכמה** |
           "@
               Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary
           }
 
-      # ==========================================
-      # יצירת GitHub Release אוטומטי והעלאת הקובץ
-      # ==========================================
       - name: Create GitHub Release & Upload Asset
         uses: softprops/action-gh-release@v2
         with:
@@ -469,9 +554,8 @@ jobs:
           tag_name: v${{ env.APP_VERSION }}-build-${{ github.run_number }}
           name: '${{ env.APP_NAME }} v${{ env.APP_VERSION }} (${{ env.TARGET_PLATFORM }})'
           body: |
-            האפליקציה נוצרה אוטומטית באמצעות מערכת הבנייה Universal Cross-Platform App Builder.
+            האפליקציה נוצרה בהצלחה דרך מנוע ה-Ultra Self-Healing האוטומטי.
             - פלטפורמה: ${{ env.TARGET_PLATFORM }}
             - גרסה: ${{ env.APP_VERSION }}
-            - תאריך ושעה: $(Get-Date -Format 'yyyy-MM-dd HH:mm')
           draft: false
           prerelease: false
