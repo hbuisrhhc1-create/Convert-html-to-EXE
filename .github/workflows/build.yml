@@ -19,7 +19,7 @@ on:
       local_html_file:
         description: 'קובץ HTML מקומי ראשי (רלוונטי רק אם כתובת האתר ריקה)'
         required: false
-        default: '.html'
+        default: 'index.html'
         type: string
       app_name:
         description: 'שם התוכנה / אפליקציה'
@@ -81,13 +81,13 @@ jobs:
       # מסלול א': בניית תוכנת Windows (EXE) + חתימה
       # ==========================================
       - name: Setup .NET SDK
-        if: ${{ github.event.inputs.target_platform == 'windows' }}
+        if: ${{ github.event.inputs.target_platform == 'Windows' }}
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
       - name: Compile Windows EXE
-        if: ${{ github.event.inputs.target_platform == 'windows' }}
+        if: ${{ github.event.inputs.target_platform == 'Windows' }}
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -216,7 +216,7 @@ jobs:
           Get-ChildItem -Path "src_win/final_publish" -Filter "*.exe" | Copy-Item -Destination "build_output/"
 
       - name: Sign Windows Executable
-        if: ${{ github.event.inputs.target_platform == 'windows' }}
+        if: ${{ github.event.inputs.target_platform == 'Windows' }}
         shell: pwsh
         env:
           CERT_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
@@ -250,18 +250,18 @@ jobs:
       # מסלול ב': בניית אפליקציית Android (APK)
       # ==========================================
       - name: Setup Java SDK
-        if: ${{ github.event.inputs.target_platform == 'android' }}
+        if: ${{ github.event.inputs.target_platform == 'Android' }}
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Setup Android SDK
-        if: ${{ github.event.inputs.target_platform == 'android' }}
+        if: ${{ github.event.inputs.target_platform == 'Android' }}
         uses: android-actions/setup-android@v3
 
       - name: Compile Android APK (Clean Release)
-        if: ${{ github.event.inputs.target_platform == 'android' }}
+        if: ${{ github.event.inputs.target_platform == 'Android' }}
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
