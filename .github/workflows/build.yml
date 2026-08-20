@@ -196,7 +196,7 @@ jobs:
                               string exeDir = AppDomain.CurrentDomain.BaseDirectory;
                               webView.CoreWebView2.SetVirtualHostNameToFolderMapping("app.local", exeDir, CoreWebView2HostResourceAccessKind.Allow);
                               string urlPath = target.Replace("\\", "/");
-                              webView.CoreWebView2.Navigate($"https://app.local/{urlPath}");
+                              webView.CoreWebView2.Navigate(`"https://app.local/{urlPath}`");
                           }
                       }
                       catch (Exception ex)
@@ -246,16 +246,23 @@ jobs:
           & $signtool sign /v /f $certPath /p "$env:CERT_PASSWORD" /tr https://timestamp.digicert.com /td sha256 /fd SHA256 $exeToSign.FullName
           Remove-Item $certPath -Force -ErrorAction SilentlyContinue
 
-     # ==========================================
+      # ==========================================
       # מסלול ב': בניית אפליקציית Android (APK)
       # ==========================================
-      - name: Compile and Sign Android APK
+      - name: Setup Java SDK
+        if: ${{ github.event.inputs.target_platform == 'android' }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        if: ${{ github.event.inputs.target_platform == 'android' }}
+        uses: android-actions/setup-android@v3
+
+      - name: Compile Android APK (Clean Release)
         if: ${{ github.event.inputs.target_platform == 'android' }}
         shell: pwsh
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           Write-Host ">>> מתקין Cordova..."
@@ -291,29 +298,12 @@ jobs:
           
           Set-Content $configPath -Value $configContent -Encoding UTF8
 
-          Write-Host ">>> מקמפל APK (מצב Release ללא חתימה אוטומטית)..."
-          cordova build android --release --no-sign
-
-          Write-Host ">>> מאתר את ה-APK הלא חתום..."
-          $unsignedApk = Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" | Select-Object -First 1
-          if (-not $unsignedApk) {
-              Write-Error "שגיאה: קובץ ה-APK הלא חתום לא נמצא!"
-              exit 1
-          }
-
-          Write-Host ">>> מאתר את כלי החתימה (apksigner ו-zipalign)..."
-          $buildToolsDir = Get-ChildItem "$env:ANDROID_HOME/build-tools/*" | Sort-Object Name -Descending | Select-Object -First 1
-          $apksigner = "$($buildToolsDir.FullName)/apksigner.bat"
-          $zipalign = "$($buildToolsDir.FullName)/zipalign.exe"
-
-          Write-Host ">>> מבצע Zipalign..."
-          & $zipalign -v 4 $unsignedApk.FullName "unsigned-aligned.apk"
-
-          Write-Host ">>> חותם על ה-APK באמצעות המפתח שלנו..."
-          & $apksigner sign --ks "release-key.jks" --ks-pass "pass:$env:ANDROID_KEYSTORE_PASSWORD" --ks-key-alias "$env:ANDROID_KEY_ALIAS" --key-pass "pass:$env:ANDROID_KEYSTORE_PASSWORD" "unsigned-aligned.apk"
+          Write-Host ">>> מקמפל APK (מצב Release נקי)..."
+          cordova build android --release
 
           New-Item -ItemType Directory -Force -Path "../build_output"
-          Move-Item "unsigned-aligned.apk" "../build_output/app-release.apk" -Force
+          Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" | Copy-Item -Destination "../build_output/"
+
       # ==========================================
       # סיום והעלאת קבצים
       # ==========================================
@@ -323,4 +313,3 @@ jobs:
           name: ${{ github.event.inputs.app_name }}-${{ github.event.inputs.target_platform }}-Build
           path: build_output/
           retention-days: 7
-          # עדכון אחרון: 2026
