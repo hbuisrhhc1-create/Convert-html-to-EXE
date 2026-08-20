@@ -249,20 +249,13 @@ jobs:
      # ==========================================
       # מסלול ב': בניית אפליקציית Android (APK)
       # ==========================================
-      - name: Setup Java SDK
-        if: ${{ github.event.inputs.target_platform == 'android' }}
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Android SDK
-        if: ${{ github.event.inputs.target_platform == 'android' }}
-        uses: android-actions/setup-android@v3
-
-      - name: Compile Android APK
+     - name: Compile and Sign Android APK
         if: ${{ github.event.inputs.target_platform == 'android' }}
         shell: pwsh
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           Write-Host ">>> מתקין Cordova..."
@@ -298,11 +291,31 @@ jobs:
           
           Set-Content $configPath -Value $configContent -Encoding UTF8
 
-          Write-Host ">>> מקמפל APK (מצב Debug)..."
-          cordova build android --debug
+          # שחזור קובץ ה-Keystore מתוך ה-Secret של GitHub
+          Write-Host ">>> משחזר את קובץ המפתח (Keystore)..."
+          $keystoreBytes = [System.Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64)
+          [System.IO.File]::WriteAllBytes("release-key.jks", $keystoreBytes)
+
+          # יצירת קובץ build.json כדי שקורדוובה תדע לחתום אוטומטית על ה-APK
+          Write-Host ">>> יוצר את הגדרות החתימה (build.json)..."
+          $buildJson = @{
+              android = @{
+                  release = @{
+                      keystore = "release-key.jks"
+                      storePassword = $env:ANDROID_KEYSTORE_PASSWORD
+                      alias = $env:ANDROID_KEY_ALIAS
+                      password = $env:ANDROID_KEY_PASSWORD
+                      keystoreType = "jks"
+                  }
+              }
+          } | ConvertTo-Json -Depth 5
+          Set-Content -Path "build.json" -Value $buildJson -Encoding UTF8
+
+          Write-Host ">>> מקמפלו חותם APK (מצב Release)..."
+          cordova build android --release -- --keystore=release-key.jks --storePassword=$env:ANDROID_KEYSTORE_PASSWORD --alias=$env:ANDROID_KEY_ALIAS --password=$env:ANDROID_KEY_PASSWORD
 
           New-Item -ItemType Directory -Force -Path "../build_output"
-          Get-ChildItem -Path "platforms/android/app/build/outputs/apk/debug" -Filter "*.apk" | Copy-Item -Destination "../build_output/"
+          Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" | Copy-Item -Destination "../build_output/"
       # ==========================================
       # סיום והעלאת קבצים
       # ==========================================
