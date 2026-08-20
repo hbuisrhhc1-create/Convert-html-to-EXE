@@ -46,14 +46,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Pre-flight & Icon Fetching
+      - name: Comprehensive Pre-flight Validation & Setup
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           
-          # יצירת שם קובץ בטוח ללא תווים אסורים
-          $safeFileName = $env:APP_NAME -replace '[<>:"/\\|?*]', ''
+          Write-Host "=========================================="
+          Write-Host ">>> מתחיל בדיקות מקדימות (Pre-flight Validation)..."
+          Write-Host "=========================================="
+
+          # 1. בדיקת שם האפליקציה ויצירת שם קובץ בטוח
+          $appName = $env:APP_NAME.Trim()
+          if ([string]::IsNullOrWhiteSpace($appName)) {
+              Write-Error "שגיאה קריטית: חובה לספק שם לאפליקציה!"
+              exit 1
+          }
+          $safeFileName = $appName -replace '[<>:"/\\|?*]', ''
           if ([string]::IsNullOrWhiteSpace($safeFileName)) { $safeFileName = "BuiltApp" }
           echo "SAFE_FILE_NAME=$safeFileName" >> $env:GITHUB_ENV
 
@@ -61,20 +70,48 @@ jobs:
           $local = $env:LOCAL_HTML.Trim()
           if ([string]::IsNullOrWhiteSpace($local)) { $local = "index.html" }
           
+          # 2. בדיקת מקור המידע (כתובת או קובץ מקומי)
           if (-not [string]::IsNullOrWhiteSpace($url)) {
-            Write-Host ">>> מקור נבחר: כתובת אינטרנט -> $url"
-            echo "FINAL_SOURCE=$url" >> $env:GITHUB_ENV
-            echo "IS_URL=true" >> $env:GITHUB_ENV
+              Write-Host ">>> בודק תקינות כתובת אינטרנט: $url"
+              try {
+                  $uri = [System.Uri]$url
+                  if ($uri.Scheme -ne 'http' -and $uri.Scheme -ne 'https') {
+                      throw "כתובת האתר חייבת להתחיל ב-http:// או https://"
+                  }
+                  Write-Host ">>> מוודא שהאתר זמין ברשת..."
+                  $response = Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -TimeoutSec 15
+                  Write-Host ">>> הכתובת תקינה והאתר מגיב (סטטוס קוד: $($response.StatusCode))."
+              } catch {
+                  Write-Error "שגיאה: כתובת האתר שהוזנה אינה תקינה או שהשרת אינו זמין: $_"
+                  exit 1
+              }
+              echo "FINAL_SOURCE=$url" >> $env:GITHUB_ENV
+              echo "IS_URL=true" >> $env:GITHUB_ENV
           } else {
-            Write-Host ">>> מקור נבחר: קובץ מקומי -> $local"
-            if (-not (Test-Path $local)) {
-              Write-Error "שגיאה: הקובץ המקומי '$local' לא נמצא בפרויקט!"
-              exit 1
-            }
-            echo "FINAL_SOURCE=$local" >> $env:GITHUB_ENV
-            echo "IS_URL=false" >> $env:GITHUB_ENV
+              Write-Host ">>> בודק קובץ מקומי: $local"
+              if (-not (Test-Path $local)) {
+                  Write-Error "שגיאה קריטית: הקובץ המקומי '$local' לא נמצא בתיקיית הפרויקט!"
+                  exit 1
+              }
+              
+              Write-Host ">>> מנתח את תקינות קובץ ה-HTML..."
+              $htmlContent = Get-Content $local -Raw -Encoding UTF8
+              if ([string]::IsNullOrWhiteSpace($htmlContent)) {
+                  Write-Error "שגיאה קריטית: קובץ ה-HTML '$local' ריק לחלוטין!"
+                  exit 1
+              }
+
+              if ($htmlContent -notmatch '<html' -and $htmlContent -notmatch '<body' -and $htmlContent -notmatch '<!DOCTYPE') {
+                  Write-Warning "אזהרה: קובץ ה-HTML אינו מכיל תגיות מבנה סטנדרטיות (<html> / <body> / <!DOCTYPE>), אך הבדיקה תמשיך כמתוכנן."
+              } else {
+                  Write-Host ">>> מבנה קובץ ה-HTML נמצא תקין."
+              }
+
+              echo "FINAL_SOURCE=$local" >> $env:GITHUB_ENV
+              echo "IS_URL=false" >> $env:GITHUB_ENV
           }
 
+          # 3. בדיקת והורדת אייקון
           $iconFound = $false
           if (Test-Path "icon.png") { 
               $iconFound = $true 
@@ -83,24 +120,27 @@ jobs:
               try {
                   $domain = ([System.Uri]$url).Host
                   $faviconApi = "https://www.google.com/s2/favicons?domain=$domain&sz=128"
-                  Write-Host ">>> מנסה להוריד אייקון מהרשת עבור הדומיין: $domain"
+                  Write-Host ">>> מנסה להוריד אייקון אוטומטי מהרשת עבור הדומיין: $domain"
                   Invoke-WebRequest -Uri $faviconApi -OutFile "icon.png" -UseBasicParsing -TimeoutSec 15
                   
                   if (Test-Path "icon.png") {
                       $iconSize = (Get-Item "icon.png").Length
                       if ($iconSize -gt 500) {
                           $iconFound = $true
-                          Write-Host ">>> אייקון הורד בהצלחה ממשקל $iconSize בתים."
+                          Write-Host ">>> אייקון הורד בהצלחה (משקל: $iconSize בתים)."
                       } else {
-                          Write-Host ">>> האייקון שהורד קטן מדי או ריק, מתעלם (משתמש בברירת מחדל)."
+                          Write-Host ">>> האייקון שהורד קטן מדי או ריק, מתעלם וממשיך בלעדיו."
                           Remove-Item "icon.png" -Force -ErrorAction SilentlyContinue
                       }
                   }
               } catch {
-                  Write-Host ">>> לא ניתן היה להוריד אייקון חיצוני (שגיאת רשת), נמשיך ללא אייקון מותאם."
+                  Write-Host ">>> לא ניתן היה להוריד אייקון חיצוני, ממשיך בבנייה ללא אייקון מותאם."
               }
           }
           if ($iconFound) { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
+          Write-Host "=========================================="
+          Write-Host ">>> כל הבדיקות המקדימות עברו בהצלחה! מתחיל בתהליך הבנייה..."
+          Write-Host "=========================================="
 
       # ==========================================
       # מסלול א': בניית תוכנת Windows (EXE)
@@ -127,7 +167,6 @@ jobs:
           Write-Host ">>> יוצר פרויקט C# WinForms חדש..."
           dotnet new winforms -n UniversalAppProject -f net8.0-windows
           
-          # חיפוש דינמי חסין תקלות של קובץ ה-csproj בכל מבנה תיקיות אפשרי
           $csprojFile = Get-ChildItem -Path . -Filter "UniversalAppProject.csproj" -Recurse | Select-Object -First 1
           if (-not $csprojFile) {
               $csprojFile = Get-ChildItem -Path . -Filter "*.csproj" -Recurse | Select-Object -First 1
@@ -138,7 +177,6 @@ jobs:
               exit 1
           }
 
-          Write-Host ">>> נמצא קובץ הפרויקט בנתיב: $($csprojFile.FullName)"
           Set-Location $csprojFile.DirectoryName
           $csprojPath = $csprojFile.Name
 
@@ -379,7 +417,7 @@ jobs:
           if ($apkFile) {
               $destApk = "$workspaceRoot/build_output/$($env:SAFE_FILE_NAME).apk"
               Copy-Item $apkFile.FullName -Destination $destApk -Force
-              Write-Host ">>> ה-APK הועבר ושמו שונה ל- $destExe"
+              Write-Host ">>> ה-APK הועבר ושמו שונה ל- $destApk"
           }
 
       # ==========================================
