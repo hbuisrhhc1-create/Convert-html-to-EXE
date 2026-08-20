@@ -14,7 +14,7 @@ on:
       website_url:
         description: 'כתובת אתר מלאה (למשל https://example.com) - השאר ריק אם משתמש בקובץ מקומי'
         required: false
-        default: ''
+        default: 'https://123456-omega-ecru.vercel.app/'
         type: string
       local_html_file:
         description: 'קובץ HTML מקומי ראשי (רלוונטי רק אם כתובת האתר ריקה)'
@@ -24,7 +24,7 @@ on:
       app_name:
         description: 'שם התוכנה / אפליקציה'
         required: true
-        default: ''
+        default: 'כספת טקסט וקבצים'
         type: string
       app_version:
         description: 'גרסת התוכנה'
