@@ -159,6 +159,10 @@ jobs:
 
           $source = $env:FINAL_SOURCE
 
+          # טיפול בתווים מיוחדים לפני ההזרקה ל-C#
+          $safeAppName = $appName -replace '"', '\"'
+          $safeSource = $source -replace '"', '\"' -replace '\\', '\\\\'
+
           $formCode = @"
           using System;
           using System.IO;
@@ -186,7 +190,7 @@ jobs:
 
                   public MainForm()
                   {
-                      this.Text = "$appName";
+                      this.Text = `"$safeAppName`";
                       this.Width = 1024;
                       this.Height = 768;
                       this.StartPosition = FormStartPosition.CenterScreen;
@@ -278,20 +282,25 @@ jobs:
                       try
                       {
                           await webView.EnsureCoreWebView2Async(null);
-                          string target = "$source";
+                          string target = `"$safeSource`";
 
-                          if (Uri.IsWellFormedUriString(target, UriKind.Absolute) && target.StartsWith("http", StringComparison.OrdinalIgnoreCase)) {
+                          // אם מדובר בכתובת אינטרנט חיצונית
+                          if (Uri.IsWellFormedUriString(target, UriKind.Absolute) && target.StartsWith("http", StringComparison.OrdinalIgnoreCase)) 
+                          {
                               webView.CoreWebView2.Navigate(target);
-                          } else {
+                          } 
+                          // אם מדובר בקובץ מקומי (HTML)
+                          else 
+                          {
                               string? exePath = Process.GetCurrentProcess().MainModule?.FileName;
                               string exeDir = !string.IsNullOrEmpty(exePath) ? (Path.GetDirectoryName(exePath) ?? AppDomain.CurrentDomain.BaseDirectory) : AppDomain.CurrentDomain.BaseDirectory;
-                              string fullPath = Path.Combine(exeDir, target);
-
-                              if (File.Exists(fullPath)) {
-                                  webView.CoreWebView2.Navigate(new Uri(fullPath).AbsoluteUri);
-                              } else {
-                                  webView.CoreWebView2.Navigate(new Uri(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, target)).AbsoluteUri);
-                              }
+                              
+                              // יצירת דומיין וירטואלי כדי למנוע בעיות CORS של קבצים מקומיים
+                              webView.CoreWebView2.SetVirtualHostNameToFolderMapping("app.local", exeDir, CoreWebView2HostResourceAccessKind.Allow);
+                              
+                              // ניווט דרך הדומיין הוירטואלי
+                              string urlPath = target.Replace("\\", "/");
+                              webView.CoreWebView2.Navigate($"https://app.local/{urlPath}");
                           }
                       }
                       catch (Exception ex)
@@ -359,8 +368,17 @@ jobs:
               Write-Error "שגיאה: signtool.exe לא נמצא."
               exit 1
           }
-          
-          Remove-Item $certPath -Force
+
+      - name: Cleanup Certificate
+        if: always()
+        shell: pwsh
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          $certPath = "$env:TEMP\temp_cert.pfx"
+          if (Test-Path $certPath) {
+              Remove-Item $certPath -Force -ErrorAction SilentlyContinue
+              Write-Host ">>> תעודת החתימה נמחקה מתיקיית הזמניים בהצלחה."
+          }
 
       - name: Packaging
         shell: pwsh
