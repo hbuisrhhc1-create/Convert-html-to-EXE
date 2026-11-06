@@ -11,21 +11,25 @@ on:
         options:
           - Windows
           - Android
+
       website_url:
         description: 'כתובת אתר מלאה. כדי להשתמש בקובץ HTML מקומי, מחק את הכתובת'
         required: false
         default: 'https://123456-omega-ecru.vercel.app/'
         type: string
+
       local_html_file:
         description: 'נתיב לקובץ HTML במאגר, למשל index.html'
         required: false
         default: index.html
         type: string
+
       app_name:
         description: 'שם האפליקציה'
         required: true
         default: 'כספת טקסט וקבצים'
         type: string
+
       app_version:
         description: 'גרסה, למשל 1.0.0'
         required: true
@@ -40,6 +44,7 @@ jobs:
     if: ${{ inputs.target_platform == 'Windows' }}
     runs-on: windows-latest
     timeout-minutes: 60
+
     env:
       WEBSITE_URL: ${{ inputs.website_url }}
       LOCAL_HTML: ${{ inputs.local_html_file }}
@@ -59,6 +64,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+
           foreach ($value in @($env:APP_NAME, $env:APP_VERSION, $env:WEBSITE_URL, $env:LOCAL_HTML)) {
             if ($null -ne $value -and ($value.Contains("`n") -or $value.Contains("`r"))) {
               throw 'הקלטים לא יכולים להכיל שורות חדשות.'
@@ -66,34 +72,50 @@ jobs:
           }
 
           $appName = $env:APP_NAME.Trim()
-          if ([string]::IsNullOrWhiteSpace($appName)) { throw 'חובה לספק שם לאפליקציה.' }
+          if ([string]::IsNullOrWhiteSpace($appName)) {
+            throw 'חובה לספק שם לאפליקציה.'
+          }
+
           if ($env:APP_VERSION -notmatch '^\d+\.\d+\.\d+([\-+][0-9A-Za-z.-]+)?$') {
             throw 'גרסה לא תקינה. יש להשתמש בתבנית כמו 1.0.0.'
           }
 
           $safeName = ($appName -replace '[<>:"/\\|?*]', '').Trim().TrimEnd('.')
-          if ([string]::IsNullOrWhiteSpace($safeName)) { $safeName = 'BuiltApp' }
+          if ([string]::IsNullOrWhiteSpace($safeName)) {
+            $safeName = 'BuiltApp'
+          }
+
           "SAFE_FILE_NAME=$safeName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
           $url = $env:WEBSITE_URL.Trim()
+
           if (-not [string]::IsNullOrWhiteSpace($url)) {
             $parsed = $null
-            if (-not [Uri]::TryCreate($url, [UriKind]::Absolute, [ref]$parsed) -or $parsed.Scheme -notin @('http','https')) {
+            if (-not [Uri]::TryCreate($url, [UriKind]::Absolute, [ref]$parsed) -or $parsed.Scheme -notin @('http', 'https')) {
               throw 'יש להזין כתובת http או https תקינה.'
             }
+
             "FINAL_SOURCE=$url" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
             'IS_URL=true' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           }
           else {
             $local = $env:LOCAL_HTML.Trim()
-            if ([string]::IsNullOrWhiteSpace($local)) { $local = 'index.html' }
+            if ([string]::IsNullOrWhiteSpace($local)) {
+              $local = 'index.html'
+            }
+
             $root = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
             $fullPath = [IO.Path]::GetFullPath((Join-Path $root $local))
             $rootPrefix = $root.TrimEnd('\') + '\'
+
             if (-not $fullPath.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
               throw 'קובץ HTML מקומי חייב להיות בתוך המאגר.'
             }
-            if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) { throw "קובץ HTML לא נמצא: $local" }
+
+            if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+              throw "קובץ HTML לא נמצא: $local"
+            }
+
             "FINAL_SOURCE=$([IO.Path]::GetRelativePath($root, $fullPath))" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
             "LOCAL_ENTRY=$(Split-Path -Leaf $fullPath)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
             'IS_URL=false' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -106,6 +128,7 @@ jobs:
           $workspace = $env:GITHUB_WORKSPACE
           $projectDir = Join-Path $workspace 'src_win\AppHost'
           $outputDir = Join-Path $workspace 'build_output'
+
           Remove-Item (Join-Path $workspace 'src_win') -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $outputDir -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
@@ -135,7 +158,10 @@ jobs:
                   {
                       Application.EnableVisualStyles();
                       Application.SetCompatibleTextRenderingDefault(false);
-                      string name = Encoding.UTF8.GetString(Convert.FromBase64String("__APP_NAME__"));
+
+                      string name = Encoding.UTF8.GetString(
+                          Convert.FromBase64String("__APP_NAME__"));
+
                       Application.Run(new MainForm(name));
                   }
               }
@@ -143,16 +169,19 @@ jobs:
               internal sealed class MainForm : Form
               {
                   private readonly Microsoft.Web.WebView2.WinForms.WebView2 webView;
-                  private readonly string appName;
 
                   public MainForm(string name)
                   {
-                      appName = name;
-                      Text = appName;
+                      Text = name;
                       Width = 1200;
                       Height = 800;
                       StartPosition = FormStartPosition.CenterScreen;
-                      webView = new Microsoft.Web.WebView2.WinForms.WebView2 { Dock = DockStyle.Fill };
+
+                      webView = new Microsoft.Web.WebView2.WinForms.WebView2
+                      {
+                          Dock = DockStyle.Fill
+                      };
+
                       Controls.Add(webView);
                       Shown += async (_, _) => await LoadPageAsync();
                   }
@@ -164,9 +193,12 @@ jobs:
                           string dataPath = Path.Combine(
                               Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                               "AppHostWebView2");
+
                           var environment = await CoreWebView2Environment.CreateAsync(null, dataPath);
                           await webView.EnsureCoreWebView2Async(environment);
-                          string target = Encoding.UTF8.GetString(Convert.FromBase64String("__SOURCE__"));
+
+                          string target = Encoding.UTF8.GetString(
+                              Convert.FromBase64String("__SOURCE__"));
 
                           if ("__IS_URL__" == "true")
                           {
@@ -175,63 +207,113 @@ jobs:
                           else
                           {
                               string site = Path.Combine(AppContext.BaseDirectory, "site");
+
                               webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                                  "app.local", site, CoreWebView2HostResourceAccessKind.Allow);
-                              string path = string.Join("/", target.Replace('\\', '/').Split('/').Select(Uri.EscapeDataString));
+                                  "app.local",
+                                  site,
+                                  CoreWebView2HostResourceAccessKind.Allow);
+
+                              string path = string.Join(
+                                  "/",
+                                  target.Replace('\\', '/')
+                                        .Split('/')
+                                        .Select(Uri.EscapeDataString));
+
                               webView.CoreWebView2.Navigate("https://app.local/" + path);
                           }
                       }
                       catch (Exception ex)
                       {
-                          MessageBox.Show("שגיאה בטעינת האפליקציה: " + ex.Message,
-                              "שגיאה", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                          MessageBox.Show(
+                              "שגיאה בטעינת האפליקציה: " + ex.Message,
+                              "שגיאה",
+                              MessageBoxButtons.OK,
+                              MessageBoxIcon.Error);
                       }
                   }
               }
           }
           '@
 
-          $code = $code.Replace('__APP_NAME__', $appName64).Replace('__SOURCE__', $source64).Replace('__IS_URL__', $env:IS_URL)
+          $code = $code.Replace('__APP_NAME__', $appName64)
+          $code = $code.Replace('__SOURCE__', $source64)
+          $code = $code.Replace('__IS_URL__', $env:IS_URL)
+
           Set-Content -Path (Join-Path $projectDir 'Program.cs') -Value $code -Encoding utf8
 
           $publishDir = Join-Path $projectDir 'publish'
           $csproj = Get-ChildItem -Path $projectDir -Filter '*.csproj' | Select-Object -First 1
-          if (-not $csproj) { throw 'לא נמצא קובץ csproj.' }
-          dotnet publish $csproj.FullName -c Release -r win-x64 --self-contained true `
-            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:EnableCompressionInSingleFile=true -p:UseAppHost=true `
-            "-p:Version=$env:APP_VERSION" --output $publishDir
+
+          if (-not $csproj) {
+            throw 'לא נמצא קובץ csproj.'
+          }
+
+          dotnet publish $csproj.FullName `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:UseAppHost=true `
+            "-p:Version=$env:APP_VERSION" `
+            --output $publishDir
 
           $exe = Get-ChildItem -Path $publishDir -Filter '*.exe' -File | Select-Object -First 1
-          if (-not $exe) { throw 'לא נוצר קובץ EXE.' }
+
+          if (-not $exe) {
+            throw 'לא נוצר קובץ EXE.'
+          }
 
           if ($env:IS_URL -eq 'true') {
             Copy-Item $exe.FullName (Join-Path $outputDir ($env:SAFE_FILE_NAME + '.exe')) -Force
           }
           else {
             $sourcePath = Join-Path $workspace $env:FINAL_SOURCE
-            $siteDir = Join-Path $publishDir 'site'
-            New-Item -ItemType Directory -Force -Path $siteDir | Out-Null
-            $excluded = @('.git', '.github', 'src_win', 'android_app', 'build_output', 'node_modules')
-            Get-ChildItem -LiteralPath (Split-Path -Parent $sourcePath) -Force |
+            $sourceDirectory = Split-Path -Parent $sourcePath
+            $siteDirectory = Join-Path $publishDir 'site'
+
+            New-Item -ItemType Directory -Force -Path $siteDirectory | Out-Null
+
+            $excluded = @(
+              '.git',
+              '.github',
+              'src_win',
+              'android_app',
+              'build_output',
+              'node_modules'
+            )
+
+            Get-ChildItem -LiteralPath $sourceDirectory -Force |
               Where-Object { $_.Name -notin $excluded } |
-              Copy-Item -Destination $siteDir -Recurse -Force
+              Copy-Item -Destination $siteDirectory -Recurse -Force
 
             $packageDir = Join-Path $workspace 'windows_package'
             Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue
             New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
+
             Copy-Item $exe.FullName -Destination $packageDir -Force
-            Copy-Item $siteDir -Destination $packageDir -Recurse -Force
-            Compress-Archive -Path (Join-Path $packageDir '*') `
-              -DestinationPath (Join-Path $outputDir ($env:SAFE_FILE_NAME + '.zip')) -Force
+            Copy-Item $siteDirectory -Destination $packageDir -Recurse -Force
+
+            Compress-Archive `
+              -Path (Join-Path $packageDir '*') `
+              -DestinationPath (Join-Path $outputDir ($env:SAFE_FILE_NAME + '.zip')) `
+              -Force
           }
 
       - name: Verify Windows output
         shell: pwsh
         run: |
-          $files = @(Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'build_output') -File)
-          if ($files.Count -eq 0) { throw 'לא נוצר קובץ פלט.' }
-          $files | ForEach-Object { Write-Host $_.FullName }
+          $outputDir = Join-Path $env:GITHUB_WORKSPACE 'build_output'
+          $files = @(Get-ChildItem -Path $outputDir -File)
+
+          if ($files.Count -eq 0) {
+            throw 'לא נוצר קובץ פלט.'
+          }
+
+          $files | ForEach-Object {
+            Write-Host "נוצר קובץ: $($_.Name)"
+          }
 
       - name: Publish Windows release
         uses: softprops/action-gh-release@v2
@@ -247,6 +329,7 @@ jobs:
     if: ${{ inputs.target_platform == 'Android' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+
     env:
       WEBSITE_URL: ${{ inputs.website_url }}
       LOCAL_HTML: ${{ inputs.local_html_file }}
@@ -272,8 +355,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           python3 - <<'PY'
-          import os, re
+          import os
+          import re
           from pathlib import Path
           from urllib.parse import urlparse
 
@@ -281,24 +366,36 @@ jobs:
           name = env['APP_NAME'].strip()
           version = env['APP_VERSION'].strip()
           url = env.get('WEBSITE_URL', '').strip()
+
           if not name or '\n' in name or '\r' in name:
               raise SystemExit('יש לספק שם אפליקציה תקין בשורה אחת.')
+
           if not re.fullmatch(r'\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?', version):
               raise SystemExit('גרסה לא תקינה; יש להשתמש בתבנית כמו 1.0.0.')
-          safe = re.sub(r'[<>:"/\\|?*]', '', name).rstrip(' .') or 'BuiltApp'
-          values = {'SAFE_FILE_NAME': safe}
+
+          safe_name = re.sub(r'[<>:"/\\|?*]', '', name).rstrip(' .') or 'BuiltApp'
+          values = {'SAFE_FILE_NAME': safe_name}
+
           if url:
               parsed = urlparse(url)
               if parsed.scheme not in ('http', 'https') or not parsed.netloc or '\n' in url or '\r' in url:
-                  raise SystemExit('יש להזין כתובת http או https תקינה בשורה אחת.')
+                  raise SystemExit('יש להזין כתובת http או https תקינה.')
+
               values.update(FINAL_SOURCE=url, IS_URL='true')
           else:
               local = env.get('LOCAL_HTML', '').strip() or 'index.html'
               root = Path(env['GITHUB_WORKSPACE']).resolve()
               path = (root / local).resolve()
+
               if not path.is_relative_to(root) or not path.is_file():
                   raise SystemExit(f'קובץ HTML מקומי לא נמצא בתוך המאגר: {local}')
-              values.update(FINAL_SOURCE=path.relative_to(root).as_posix(), LOCAL_ENTRY=path.name, IS_URL='false')
+
+              values.update(
+                  FINAL_SOURCE=path.relative_to(root).as_posix(),
+                  LOCAL_ENTRY=path.name,
+                  IS_URL='false'
+              )
+
           with open(env['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               for key, value in values.items():
                   if '\n' in value or '\r' in value:
@@ -310,16 +407,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+
           if [[ -z "$sdk_root" || ! -d "$sdk_root" ]]; then
             echo 'Android SDK לא נמצא ב-runner.'
             exit 1
           fi
 
           sdkmanager_path="$(find "$sdk_root/cmdline-tools" -type f -name sdkmanager -print 2>/dev/null | sort -V | tail -n 1)"
+
           if [[ -z "$sdkmanager_path" ]]; then
             sdkmanager_path="$(command -v sdkmanager || true)"
           fi
+
           if [[ -z "$sdkmanager_path" ]]; then
             echo 'לא נמצא sdkmanager.'
             exit 1
@@ -338,13 +439,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           workspace="$GITHUB_WORKSPACE"
           app_dir="$workspace/android_app"
           output_dir="$workspace/build_output"
+
           rm -rf "$app_dir" "$output_dir"
           mkdir -p "$output_dir"
 
           npm install --global cordova@12.0.0
+
           cordova create "$app_dir" com.universal.app "$APP_NAME"
           cd "$app_dir"
           cordova platform add android@13.0.0
@@ -357,50 +461,108 @@ jobs:
 
           app_dir = Path(os.environ['GITHUB_WORKSPACE']) / 'android_app'
           config_path = app_dir / 'config.xml'
+
           tree = ET.parse(config_path)
           root = tree.getroot()
-          local = lambda tag: tag.rsplit('}', 1)[-1]
-          content = next((node for node in root.iter() if local(node.tag) == 'content'), None)
-          name = next((node for node in root.iter() if local(node.tag) == 'name'), None)
+
+          # Cordova requires the root element to be named "widget".
+          # Register the XML namespace as the default so ElementTree does not
+          # serialize the root as "ns0:widget".
+          namespace = ''
+          if root.tag.startswith('{'):
+              namespace = root.tag[1:].split('}', 1)[0]
+              ET.register_namespace('', namespace)
+
+          def qualified_tag(name):
+              return f'{{{namespace}}}{name}' if namespace else name
+
+          def local_name(tag):
+              return tag.rsplit('}', 1)[-1]
+
+          content = next(
+              (node for node in root.iter() if local_name(node.tag) == 'content'),
+              None
+          )
+          name = next(
+              (node for node in root.iter() if local_name(node.tag) == 'name'),
+              None
+          )
+
           if content is None:
               raise SystemExit('לא נמצא רכיב content ב-config.xml.')
+
           if name is not None:
               name.text = os.environ['APP_NAME']
+
           if os.environ['IS_URL'] == 'true':
               url = os.environ['FINAL_SOURCE']
               parsed = urlparse(url)
               origin = f'{parsed.scheme}://{parsed.netloc}'
+
               content.set('src', url)
-              ET.SubElement(root, 'access', {'origin': origin})
-              ET.SubElement(root, 'allow-navigation', {'href': origin + '/*'})
+
+              ET.SubElement(
+                  root,
+                  qualified_tag('access'),
+                  {'origin': origin}
+              )
+
+              ET.SubElement(
+                  root,
+                  qualified_tag('allow-navigation'),
+                  {'href': origin + '/*'}
+              )
           else:
               content.set('src', os.environ['LOCAL_ENTRY'])
-          tree.write(config_path, encoding='utf-8', xml_declaration=True)
+
+          tree.write(
+              config_path,
+              encoding='utf-8',
+              xml_declaration=True
+          )
           PY
 
           if [[ "$IS_URL" == 'false' ]]; then
             source_dir="$(dirname "$workspace/$FINAL_SOURCE")"
+
             mkdir -p "$app_dir/www"
+
             rsync -a \
-              --exclude='.git' --exclude='.github' --exclude='src_win' \
-              --exclude='android_app' --exclude='build_output' --exclude='node_modules' \
+              --exclude='.git' \
+              --exclude='.github' \
+              --exclude='src_win' \
+              --exclude='android_app' \
+              --exclude='build_output' \
+              --exclude='node_modules' \
               "$source_dir/" "$app_dir/www/"
           fi
 
           cordova build android --debug
+
           apk_dir="$app_dir/platforms/android/app/build/outputs/apk/debug"
           apk_file="$(find "$apk_dir" -maxdepth 1 -type f -name '*.apk' -print -quit)"
+
           if [[ -z "$apk_file" ]]; then
             echo 'לא נוצר קובץ APK.'
             exit 1
           fi
+
           cp "$apk_file" "$output_dir/$SAFE_FILE_NAME.apk"
+          echo "נוצר APK: $output_dir/$SAFE_FILE_NAME.apk"
 
       - name: Verify Android output
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$(find "$GITHUB_WORKSPACE/build_output" -maxdepth 1 -type f -name '*.apk' -print -quit)"
+
+          apk_file="$(find "$GITHUB_WORKSPACE/build_output" -maxdepth 1 -type f -name '*.apk' -print -quit)"
+
+          if [[ -z "$apk_file" ]]; then
+            echo 'לא נמצא קובץ APK בתיקיית הפלט.'
+            exit 1
+          fi
+
+          echo "נמצא קובץ APK: $apk_file"
 
       - name: Publish Android release
         uses: softprops/action-gh-release@v2
