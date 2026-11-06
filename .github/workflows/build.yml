@@ -1,4 +1,4 @@
-name: Universal Cross-Platform App Builder (Massive Autonomous Adaptive Engine)
+name: Build Windows app or Android APK
 
 on:
   workflow_dispatch:
@@ -6,38 +6,35 @@ on:
       target_platform:
         description: 'בחר פלטפורמה ליצירה'
         required: true
-        default: 'Windows'
+        default: Windows
         type: choice
         options:
           - Windows
           - Android
+
       website_url:
-        description: 'כתובת אתר מלאה (למשל https://example.com) - השאר ריק אם משתמש בקובץ מקומי'
+        description: 'כתובת אתר מלאה. השאר ריק כדי להשתמש בקובץ HTML מקומי'
         required: false
         default: 'https://123456-omega-ecru.vercel.app/'
         type: string
+
       local_html_file:
-        description: 'קובץ HTML מקומי ראשי (רלוונטי רק אם כתובת האתר ריקה)'
+        description: 'נתיב לקובץ HTML במאגר, למשל index.html'
         required: false
-        default: 'index.html'
+        default: index.html
         type: string
+
       app_name:
-        description: 'שם התוכנה / אפליקציה'
+        description: 'שם האפליקציה'
         required: true
         default: 'כספת טקסט וקבצים'
         type: string
-      app_version:
-        description: 'גרסת התוכנה'
-        required: true
-        default: '1.0.0'
-        type: string
 
-env:
-  TARGET_PLATFORM: ${{ github.event.inputs.target_platform }}
-  WEBSITE_URL: ${{ github.event.inputs.website_url }}
-  LOCAL_HTML: ${{ github.event.inputs.local_html_file }}
-  APP_NAME: ${{ github.event.inputs.app_name }}
-  APP_VERSION: ${{ github.event.inputs.app_version }}
+      app_version:
+        description: 'גרסה, למשל 1.0.0'
+        required: true
+        default: 1.0.0
+        type: string
 
 permissions:
   contents: write
@@ -45,485 +42,403 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 90
+
+    env:
+      TARGET_PLATFORM: ${{ inputs.target_platform }}
+      WEBSITE_URL: ${{ inputs.website_url }}
+      LOCAL_HTML: ${{ inputs.local_html_file }}
+      APP_NAME: ${{ inputs.app_name }}
+      APP_VERSION: ${{ inputs.app_version }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ==========================================
-      # ניקוי אגרסיבי למניעת תיקיות מקוננות ישנות
-      # ==========================================
-      - name: Force Clean Workspace
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'SilentlyContinue'
-          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host ">>> מנקה לחלוטין תיקיות בנייה ישנות ומקוננות..."
-          
-          if (Test-Path "src_win") { Remove-Item "src_win" -Recurse -Force }
-          if (Test-Path "android_app") { Remove-Item "android_app" -Recurse -Force }
-          if (Test-Path "build_output") { Remove-Item "build_output" -Recurse -Force }
-          
-          Get-ChildItem -Path . -Recurse -Filter "src_win" | ForEach-Object {
-              try { Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue } catch {}
-          }
-
-      # ==========================================
-      # מטמון תלויות חכם
-      # ==========================================
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-
-      - name: Cache Node Modules
-        if: ${{ env.TARGET_PLATFORM == 'Android' }}
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      # ==========================================
-      # בדיקות מקדימות
-      # ==========================================
-      - name: Pre-flight Validation
+      - name: Validate inputs
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          
+
+          foreach ($value in @($env:APP_NAME, $env:APP_VERSION, $env:WEBSITE_URL, $env:LOCAL_HTML)) {
+            if ($null -ne $value -and $value.Contains("`n")) {
+              throw 'הקלטים לא יכולים להכיל שורות חדשות.'
+            }
+            if ($null -ne $value -and $value.Contains("`r")) {
+              throw 'הקלטים לא יכולים להכיל שורות חדשות.'
+            }
+          }
+
           $appName = $env:APP_NAME.Trim()
-          if ([string]::IsNullOrWhiteSpace($appName)) { Write-Error "חובה לספק שם לאפליקציה!"; exit 1 }
-          $safeFileName = $appName -replace '[<>:"/\\|?*]', ''
-          if ([string]::IsNullOrWhiteSpace($safeFileName)) { $safeFileName = "BuiltApp" }
-          echo "SAFE_FILE_NAME=$safeFileName" >> $env:GITHUB_ENV
+          if ([string]::IsNullOrWhiteSpace($appName)) {
+            throw 'חובה לספק שם לאפליקציה.'
+          }
+
+          if ($env:APP_VERSION -notmatch '^\d+\.\d+\.\d+([\-+][0-9A-Za-z.-]+)?$') {
+            throw 'גרסה לא תקינה. יש להשתמש בתבנית כמו 1.0.0.'
+          }
+
+          $safeFileName = ($appName -replace '[<>:"/\\|?*]', '').Trim().TrimEnd('.')
+          if ([string]::IsNullOrWhiteSpace($safeFileName)) {
+            $safeFileName = 'BuiltApp'
+          }
+
+          "SAFE_FILE_NAME=$safeFileName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
           $url = $env:WEBSITE_URL.Trim()
-          $local = $env:LOCAL_HTML.Trim()
-          if ([string]::IsNullOrWhiteSpace($local)) { $local = "index.html" }
-          
           if (-not [string]::IsNullOrWhiteSpace($url)) {
-              echo "FINAL_SOURCE=$url" >> $env:GITHUB_ENV
-              echo "IS_URL=true" >> $env:GITHUB_ENV
-          } else {
-              if (-not (Test-Path $local)) { Write-Error "הקובץ המקומי $local לא נמצא!"; exit 1 }
-              echo "FINAL_SOURCE=$local" >> $env:GITHUB_ENV
-              echo "IS_URL=false" >> $env:GITHUB_ENV
+            $parsedUrl = $null
+            if (-not [Uri]::TryCreate($url, [UriKind]::Absolute, [ref]$parsedUrl)) {
+              throw 'כתובת האתר אינה תקינה.'
+            }
+            if ($parsedUrl.Scheme -notin @('http', 'https')) {
+              throw 'כתובת האתר חייבת להתחיל ב-http:// או ב-https://.'
+            }
+
+            "FINAL_SOURCE=$url" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            'IS_URL=true' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+          else {
+            $local = $env:LOCAL_HTML.Trim()
+            if ([string]::IsNullOrWhiteSpace($local)) {
+              $local = 'index.html'
+            }
+
+            $workspace = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
+            $fullPath = [IO.Path]::GetFullPath((Join-Path $workspace $local))
+            $workspacePrefix = $workspace.TrimEnd('\') + '\'
+
+            if (-not $fullPath.StartsWith($workspacePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+              throw 'קובץ ה-HTML חייב להיות בתוך המאגר.'
+            }
+            if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+              throw "קובץ HTML מקומי לא נמצא: $local"
+            }
+
+            $relativePath = [IO.Path]::GetRelativePath($workspace, $fullPath)
+            "FINAL_SOURCE=$relativePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            'IS_URL=false' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           }
 
-          if (Test-Path "icon.png") { echo "ICON_AVAILABLE=true" >> $env:GITHUB_ENV }
+      # ----------------------------
+      # Windows EXE
+      # ----------------------------
 
-      # ==========================================
-      # בניית Windows
-      # ==========================================
-      - name: Setup .NET SDK
-        if: ${{ env.TARGET_PLATFORM == 'Windows' }}
+      - name: Setup .NET
+        if: ${{ inputs.target_platform == 'Windows' }}
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: 8.0.x
 
-      - name: Compile Windows EXE with Massive Autonomous Engine
-        if: ${{ env.TARGET_PLATFORM == 'Windows' }}
+      - name: Build Windows EXE
+        if: ${{ inputs.target_platform == 'Windows' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          $workspaceRoot = $env:GITHUB_WORKSPACE
 
-          function Remove-LockedFolderForce {
-              param([string]$FolderPath)
-              if (Test-Path $FolderPath) {
-                  Stop-Process -Name "dotnet", "msbuild", "signtool", "vBC" -Force -ErrorAction SilentlyContinue
-                  Start-Sleep -Seconds 2
-                  Get-ChildItem -Path $FolderPath -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
-                      try { $_.Attributes = 'Normal' } catch { }
-                  }
-                  for ($i = 1; $i -le 4; $i++) {
-                      try { Remove-Item $FolderPath -Recurse -Force -ErrorAction Stop; break } catch { Start-Sleep -Seconds 3 }
-                  }
-              }
+          $workspace = $env:GITHUB_WORKSPACE
+          $projectDir = Join-Path $workspace 'src_win\AppHost'
+          $outputDir = Join-Path $workspace 'build_output'
+
+          if (Test-Path (Join-Path $workspace 'src_win')) {
+            Remove-Item (Join-Path $workspace 'src_win') -Recurse -Force
           }
+          if (Test-Path $outputDir) {
+            Remove-Item $outputDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
-          function Invoke-MassiveWindowsEngine {
-              param([scriptblock]$ScriptBlock, [string]$ContextName)
-              $maxStrategies = 10
-              $currentStrategy = 1
-              $workspaceRoot = $env:GITHUB_WORKSPACE
+          dotnet new winforms --name AppHost --output $projectDir --framework net8.0 --force
+          Set-Location $projectDir
+          dotnet add package Microsoft.Web.WebView2
 
-              while ($currentStrategy -le $maxStrategies) {
-                  try {
-                      Set-Location $workspaceRoot
-                      Write-Host ">>> [$ContextName] מריץ אסטרטגיית תיקון מספר $currentStrategy/$maxStrategies..."
-                      & $ScriptBlock
-                      Write-Host ">>> [$ContextName] הבנייה הוכתרה בהצלחה!"
-                      return
-                  } catch {
-                      $errorMessage = $_.Exception.Message
-                      Write-Warning "⚠️ שגיאה ברובד $ContextName (ניסיון $currentStrategy/$maxStrategies): $errorMessage"
+          $appNameBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($env:APP_NAME))
+          $sourceBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($env:FINAL_SOURCE))
+          $isUrl = $env:IS_URL.ToLowerInvariant()
 
-                      if ($currentStrategy -eq $maxStrategies) {
-                          Write-Error "❌ כל 10 אסטרטגיות התיקון האוטונומיות עבור Windows מוצו."
-                          throw $_
-                      }
+          $programCode = @'
+          using System;
+          using System.IO;
+          using System.Text;
+          using System.Windows.Forms;
+          using Microsoft.Web.WebView2.Core;
 
-                      Write-Host ">>> מנוע ה-AI מנתח ומפעיל את האסטרטגיה הבאה ברשימה..."
-                      Set-Location $workspaceRoot
-                      
-                      switch ($currentStrategy) {
-                          1 { Stop-Process -Name "dotnet", "msbuild" -Force -ErrorAction SilentlyContinue; Remove-LockedFolderForce "$workspaceRoot/src_win/obj" }
-                          2 { Remove-LockedFolderForce "$workspaceRoot/src_win/obj"; Remove-LockedFolderForce "$workspaceRoot/src_win/bin" }
-                          3 { dotnet nuget locals all --clear }
-                          4 { if (Test-Path "$workspaceRoot/src_win") { Get-ChildItem -Path "$workspaceRoot/src_win" -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object { $_.Attributes = 'Normal' } } }
-                          5 { if (Test-Path "$workspaceRoot/src_win") { Set-Location "$workspaceRoot/src_win"; dotnet restore --force --no-cache } }
-                          6 { Remove-LockedFolderForce "$workspaceRoot/src_win/final_publish"; Remove-LockedFolderForce "$workspaceRoot/src_win/bin/Release" }
-                          7 { Remove-LockedFolderForce "$env:LocalAppData\Microsoft\MSBuild" }
-                          8 { dotnet build-server shutdown }
-                          9 { Remove-LockedFolderForce "$workspaceRoot/src_win" }
-                          default { Start-Sleep -Seconds 5 }
-                      }
+          namespace AppHost
+          {
+              internal static class Program
+              {
+                  [STAThread]
+                  private static void Main()
+                  {
+                      Application.EnableVisualStyles();
+                      Application.SetCompatibleTextRenderingDefault(false);
 
-                      Set-Location $workspaceRoot
-                      $currentStrategy++
-                      Start-Sleep -Seconds 3
+                      string appName = Encoding.UTF8.GetString(Convert.FromBase64String("__APP_NAME_BASE64__"));
+                      Application.Run(new MainForm(appName));
                   }
               }
-          }
 
-          $BuildWindowsLogic = {
-              Set-Location $workspaceRoot
-              if (-not (Test-Path "$workspaceRoot/src_win")) {
-                  New-Item -ItemType Directory -Force -Path "$workspaceRoot/src_win" | Out-Null
-                  Set-Location "$workspaceRoot/src_win"
-                  Write-Host ">>> יוצר שלד פרויקט C# WinForms חדש מאפס..."
-                  dotnet new winforms -o . --force
-                  dotnet add package Microsoft.Web.WebView2
-              } else {
-                  Set-Location "$workspaceRoot/src_win"
-              }
+              internal sealed class MainForm : Form
+              {
+                  private readonly string appName;
+                  private readonly Microsoft.Web.WebView2.WinForms.WebView2 webView;
 
-              $csprojFile = Get-ChildItem -Path . -Filter "*.csproj" | Select-Object -First 1
-              if (-not $csprojFile) { throw "קובץ ה-csproj חסר או נפגם!" }
+                  public MainForm(string name)
+                  {
+                      appName = name;
+                      Text = appName;
+                      Width = 1200;
+                      Height = 800;
+                      StartPosition = FormStartPosition.CenterScreen;
 
-              $appVersion = $env:APP_VERSION
-              $appName = $env:APP_NAME
+                      webView = new Microsoft.Web.WebView2.WinForms.WebView2
+                      {
+                          Dock = DockStyle.Fill
+                      };
+                      Controls.Add(webView);
 
-              $iconArg = ""
-              if ($env:ICON_AVAILABLE == 'true' -and (Test-Path "$workspaceRoot/icon.png")) {
-                  Copy-Item "$workspaceRoot/icon.png" "icon.png" -Force
-                  try {
-                      magick icon.png -resize 256x256! -define icon:auto-resize=256,128,64,48,32,16 icon.ico
-                      if (Test-Path "icon.ico") {
-                          $iconArg = "icon.ico"
+                      Shown += async (_, _) => await LoadWebPageAsync();
+                  }
+
+                  private async System.Threading.Tasks.Task LoadWebPageAsync()
+                  {
+                      try
+                      {
+                          string userDataFolder = Path.Combine(
+                              Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                              "AppHostWebView2");
+
+                          var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                          await webView.EnsureCoreWebView2Async(environment);
+
+                          string target = Encoding.UTF8.GetString(
+                              Convert.FromBase64String("__SOURCE_BASE64__"));
+
+                          if ("__IS_URL__" == "true")
+                          {
+                              webView.CoreWebView2.Navigate(target);
+                          }
+                          else
+                          {
+                              string siteDirectory = Path.Combine(AppContext.BaseDirectory, "site");
+                              webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                                  "app.local",
+                                  siteDirectory,
+                                  CoreWebView2HostResourceAccessKind.Allow);
+
+                              string relativePath = target.Replace('\\', '/');
+                              webView.CoreWebView2.Navigate("https://app.local/" + relativePath);
+                          }
                       }
-                  } catch { }
-              }
-
-              $safeAppName = $appName -replace '"', '\"'
-              $safeSource = $env:FINAL_SOURCE -replace '"', '\"' -replace '\\', '\\\\'
-              $isUrl = $env:IS_URL
-
-              $formCodeLines = @(
-                  "using System;",
-                  "using System.IO;",
-                  "using System.Windows.Forms;",
-                  "using System.Diagnostics;",
-                  "using Microsoft.Web.WebView2.Core;",
-                  "namespace UniversalAppProject",
-                  "{",
-                  "    static class Program",
-                  "    {",
-                  "        [STAThread]",
-                  "        static void Main()",
-                  "        {",
-                  "            Application.EnableVisualStyles();",
-                  "            Application.SetCompatibleTextRenderingDefault(false);",
-                  "            Application.Run(new MainForm());",
-                  "        }",
-                  "    }",
-                  "    public partial class MainForm : Form",
-                  "    {",
-                  "        private Microsoft.Web.WebView2.WinForms.WebView2? webView;",
-                  "        public MainForm()",
-                  "        {",
-                  "            this.Text = `"$safeAppName`";",
-                  "            this.Width = 1024;",
-                  "            this.Height = 768;",
-                  "            this.StartPosition = FormStartPosition.CenterScreen;",
-                  "            try",
-                  "            {",
-                  "                string? exePath = Process.GetCurrentProcess().MainModule?.FileName;",
-                  "                if (!string.IsNullOrEmpty(exePath))",
-                  "                {",
-                  "                    this.Icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);",
-                  "                }",
-                  "            }",
-                  "            catch { }",
-                  "            LoadWebView();",
-                  "        }",
-                  "        private async void LoadWebView()",
-                  "        {",
-                  "            webView = new Microsoft.Web.WebView2.WinForms.WebView2();",
-                  "            webView.Dock = DockStyle.Fill;",
-                  "            this.Controls.Add(webView);",
-                  "            try",
-                  "            {",
-                  "                string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), `"$safeAppName`");",
-                  "                var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);",
-                  "                await webView.EnsureCoreWebView2Async(env);",
-                  "                string target = `"$safeSource`";",
-                  "                bool isUrl = System.Convert.ToBoolean(`"$isUrl`".ToLower());",
-                  "                if (isUrl) {",
-                  "                    webView.CoreWebView2.Navigate(target);",
-                  "                } else {",
-                  "                    string exeDir = AppDomain.CurrentDomain.BaseDirectory;",
-                  "                    webView.CoreWebView2.SetVirtualHostNameToFolderMapping(`"app.local`", exeDir, CoreWebView2HostResourceAccessKind.Allow);",
-                  "                    string urlPath = target.Replace(`"\\`", `"/`");",
-                  "                    webView.CoreWebView2.Navigate(`"https://app.local/{urlPath}`");",
-                  "                }",
-                  "            }",
-                  "            catch (Exception ex)",
-                  "            {",
-                  "                MessageBox.Show(`"שגיאה בטעינת האפליקציה: `" + ex.Message, `"שגיאה`", MessageBoxButtons.OK, MessageBoxIcon.Error);",
-                  "            }",
-                  "        }",
-                  "    }",
-                  "}"
-              )
-              $formCodeLines | Set-Content -Path "Program.cs" -Encoding UTF8
-
-              Write-Host ">>> מריץ תהליך קומפילציה מלא (Publish) באמצעות תהליך ישיר..."
-              
-              $iconParamStr = ""
-              if (-not [string]::IsNullOrEmpty($iconArg)) {
-                  $iconParamStr = "-p:ApplicationIcon=`"$iconArg`""
-              }
-
-              $psi = New-Object System.Diagnostics.ProcessStartInfo
-              $psi.FileName = "dotnet"
-              $psi.Arguments = "publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:OutputType=""WinExe"" -p:Version=""$appVersion"" -p:AssemblyVersion=""$appVersion"" -p:FileVersion=""$appVersion"" -p:Product=""$appName"" -p:Company=""UniversalApp"" $iconParamStr -o ""./final_publish"""
-              $psi.UseShellExecute = $false
-              $psi.RedirectStandardOutput = $true
-              $psi.RedirectStandardError = $true
-
-              $process = [System.Diagnostics.Process]::Start($psi)
-              $stdout = $process.StandardOutput.ReadToEnd()
-              $stderr = $process.StandardError.ReadToEnd()
-              $process.WaitForExit()
-
-              Write-Host $stdout
-              if ($process.ExitCode -ne 0) {
-                  Write-Error $stderr
-                  throw "שגיאה בקומפילציית .NET (Exit Code: $($process.ExitCode))"
-              }
-              
-              New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
-              $exeFile = Get-ChildItem -Path "./final_publish" -Filter "*.exe" -File | Select-Object -First 1
-              if ($exeFile) {
-                  Copy-Item $exeFile.FullName -Destination "$workspaceRoot/build_output/$($env:SAFE_FILE_NAME).exe" -Force
+                      catch (Exception ex)
+                      {
+                          MessageBox.Show(
+                              "שגיאה בטעינת האפליקציה: " + ex.Message,
+                              "שגיאה",
+                              MessageBoxButtons.OK,
+                              MessageBoxIcon.Error);
+                      }
+                  }
               }
           }
+          '@
 
-          Invoke-MassiveWindowsEngine -ScriptBlock $BuildWindowsLogic -ContextName "Windows Compilation Engine"
+          $programCode = $programCode.Replace('__APP_NAME_BASE64__', $appNameBase64)
+          $programCode = $programCode.Replace('__SOURCE_BASE64__', $sourceBase64)
+          $programCode = $programCode.Replace('__IS_URL__', $isUrl)
+          Set-Content -Path (Join-Path $projectDir 'Program.cs') -Value $programCode -Encoding utf8
 
-      - name: Sign Windows Executable
-        if: ${{ env.TARGET_PLATFORM == 'Windows' }}
-        shell: pwsh
-        env:
-          CERT_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
-          CERT_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
-        run: |
-          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          if ([string]::IsNullOrWhiteSpace($env:CERT_BASE64)) { exit 0 }
-          $signtool = (Get-ChildItem "C:\Program Files*\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
-          if (-not $signtool -or -not (Test-Path $signtool)) { exit 0 }
-
-          $certBytes = [System.Convert]::FromBase64String($env:CERT_BASE64)
-          $certPath = "$env:TEMP\temp_cert.pfx"
-          [System.IO.File]::WriteAllBytes($certPath, $certBytes)
-          
-          $exeToSign = Get-ChildItem -Path "build_output" -Filter "*.exe" -File | Select-Object -First 1
-          if ($exeToSign) {
-              & $signtool sign /v /f $certPath /p "$env:CERT_PASSWORD" /tr https://timestamp.digicert.com /td sha256 /fd SHA256 $exeToSign.FullName
+          $publishDir = Join-Path $projectDir 'publish'
+          $csproj = Get-ChildItem -Path $projectDir -Filter '*.csproj' | Select-Object -First 1
+          if (-not $csproj) {
+            throw 'לא נמצא קובץ פרויקט csproj.'
           }
-          Remove-Item $certPath -Force -ErrorAction SilentlyContinue
 
-      # ==========================================
-      # בניית Android
-      # ==========================================
-      - name: Setup Java SDK
-        if: ${{ env.TARGET_PLATFORM == 'Android' }}
+          dotnet publish $csproj.FullName `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:UseAppHost=true `
+            --output $publishDir
+
+          if ($env:IS_URL -eq 'false') {
+            $sourcePath = Join-Path $workspace $env:FINAL_SOURCE
+            $sourceDirectory = Split-Path -Parent $sourcePath
+            $siteDirectory = Join-Path $publishDir 'site'
+            New-Item -ItemType Directory -Force -Path $siteDirectory | Out-Null
+
+            $excludedNames = @('.git', '.github', 'src_win', 'android_app', 'build_output', 'node_modules')
+            Get-ChildItem -LiteralPath $sourceDirectory -Force |
+              Where-Object { $_.Name -notin $excludedNames } |
+              Copy-Item -Destination $siteDirectory -Recurse -Force
+          }
+
+          $exe = Get-ChildItem -Path $publishDir -Filter '*.exe' -File | Select-Object -First 1
+          if (-not $exe) {
+            throw 'לא נוצר קובץ EXE.'
+          }
+
+          Copy-Item -Path $exe.FullName `
+            -Destination (Join-Path $outputDir ($env:SAFE_FILE_NAME + '.exe')) `
+            -Force
+
+      # ----------------------------
+      # Android APK
+      # ----------------------------
+
+      - name: Setup Java
+        if: ${{ inputs.target_platform == 'Android' }}
         uses: actions/setup-java@v5
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
       - name: Setup Node.js
-        if: ${{ env.TARGET_PLATFORM == 'Android' }}
+        if: ${{ inputs.target_platform == 'Android' }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Setup Android SDK
-        if: ${{ env.TARGET_PLATFORM == 'Android' }}
+        if: ${{ inputs.target_platform == 'Android' }}
         uses: android-actions/setup-android@v3
 
-      - name: Compile Android APK with Massive Autonomous Engine
-        if: ${{ env.TARGET_PLATFORM == 'Android' }}
+      - name: Install Android SDK packages
+        if: ${{ inputs.target_platform == 'Android' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Build Android APK
+        if: ${{ inputs.target_platform == 'Android' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          $workspaceRoot = $env:GITHUB_WORKSPACE
 
-          function Remove-LockedFolderForce {
-              param([string]$FolderPath)
-              if (Test-Path $FolderPath) {
-                  Stop-Process -Name "node", "java", "gradle", "adb" -Force -ErrorAction SilentlyContinue
-                  Start-Sleep -Seconds 2
-                  Get-ChildItem -Path $FolderPath -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
-                      try { $_.Attributes = 'Normal' } catch { }
-                  }
-                  for ($i = 1; $i -le 4; $i++) {
-                      try { Remove-Item $FolderPath -Recurse -Force -ErrorAction Stop; break } catch { Start-Sleep -Seconds 3 }
-                  }
-              }
+          $workspace = $env:GITHUB_WORKSPACE
+          $appDir = Join-Path $workspace 'android_app'
+          $outputDir = Join-Path $workspace 'build_output'
+
+          if (Test-Path $appDir) {
+            Remove-Item $appDir -Recurse -Force
+          }
+          if (Test-Path $outputDir) {
+            Remove-Item $outputDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+
+          npm install --global cordova
+          cordova create $appDir com.universal.app 'AppTempName'
+
+          Set-Location $appDir
+          cordova platform add android@13.0.0
+
+          $configPath = Join-Path $appDir 'config.xml'
+          [xml]$config = Get-Content -LiteralPath $configPath -Raw
+          $contentNode = $config.SelectSingleNode("//*[local-name()='content']")
+          if (-not $contentNode) {
+            throw 'לא נמצא רכיב content ב-config.xml.'
           }
 
-          function Invoke-MassiveAndroidEngine {
-              param([scriptblock]$ScriptBlock, [string]$ContextName)
-              $maxStrategies = 10
-              $currentStrategy = 1
-              $workspaceRoot = $env:GITHUB_WORKSPACE
+          if ($env:IS_URL -eq 'true') {
+            $url = [Uri]$env:FINAL_SOURCE
+            $contentNode.SetAttribute('src', $env:FINAL_SOURCE)
 
-              while ($currentStrategy -le $maxStrategies) {
-                  try {
-                      Set-Location $workspaceRoot
-                      Write-Host ">>> [$ContextName] מריץ אסטרטגיית תיקון אנדרואיד מספר $currentStrategy/$maxStrategies..."
-                      & $ScriptBlock
-                      Write-Host ">>> [$ContextName] הבנייה הצליחה!"
-                      return
-                  } catch {
-                      $errorMessage = $_.Exception.Message
-                      Write-Warning "⚠️ שגיאה באנדרואיד (ניסיון $currentStrategy/$maxStrategies): $errorMessage"
+            $namespace = $config.DocumentElement.NamespaceURI
+            $accessNode = $config.CreateElement('access', $namespace)
+            $accessNode.SetAttribute('origin', $url.GetLeftPart([UriPartial]::Authority))
+            $config.DocumentElement.AppendChild($accessNode) | Out-Null
 
-                      if ($currentStrategy -eq $maxStrategies) {
-                          Write-Error "❌ כל 10 אסטרטגיות התיקון לאנדרואיד מוצו."
-                          throw $_
-                      }
+            $navigationNode = $config.CreateElement('allow-navigation', $namespace)
+            $navigationNode.SetAttribute('href', $url.GetLeftPart([UriPartial]::Authority) + '/*')
+            $config.DocumentElement.AppendChild($navigationNode) | Out-Null
+          }
+          else {
+            $sourcePath = Join-Path $workspace $env:FINAL_SOURCE
+            $sourceDirectory = Split-Path -Parent $sourcePath
+            $contentNode.SetAttribute('src', (Split-Path -Leaf $sourcePath))
 
-                      Write-Host ">>> מנוע ה-AI עובר לאסטרטגיית התיקון הבאה..."
-                      Set-Location $workspaceRoot
-                      switch ($currentStrategy) {
-                          1 { Stop-Process -Name "node", "java" -Force -ErrorAction SilentlyContinue; Remove-LockedFolderForce "$workspaceRoot/android_app/platforms" }
-                          2 { npm cache clean --force }
-                          3 { Remove-LockedFolderForce "$workspaceRoot/android_app/plugins" }
-                          4 { npm install -g cordova@latest }
-                          5 { Remove-LockedFolderForce "$workspaceRoot/android_app/.gradle" }
-                          6 { Remove-LockedFolderForce "$workspaceRoot/android_app/www" }
-                          7 { Remove-LockedFolderForce "$workspaceRoot/android_app/platforms/android/app/build" }
-                          8 { Remove-LockedFolderForce "$env:USERPROFILE\.gradle" }
-                          9 { Remove-LockedFolderForce "$workspaceRoot/android_app" }
-                          default { Start-Sleep -Seconds 4 }
-                      }
+            $wwwDirectory = Join-Path $appDir 'www'
+            if (Test-Path $wwwDirectory) {
+              Remove-Item $wwwDirectory -Recurse -Force
+            }
+            New-Item -ItemType Directory -Force -Path $wwwDirectory | Out-Null
 
-                      Set-Location $workspaceRoot
-                      $currentStrategy++
-                      Start-Sleep -Seconds 3
-                  }
-              }
+            $excludedNames = @('.git', '.github', 'src_win', 'android_app', 'build_output', 'node_modules')
+            Get-ChildItem -LiteralPath $sourceDirectory -Force |
+              Where-Object { $_.Name -notin $excludedNames } |
+              Copy-Item -Destination $wwwDirectory -Recurse -Force
           }
 
-          $BuildAndroidLogic = {
-              Set-Location $workspaceRoot
-              Write-Host ">>> מוודא התקנת Cordova..."
-              npm install -g cordova
-
-              if (-not (Test-Path "$workspaceRoot/android_app")) {
-                  cordova create android_app com.universal.app "AppTempName"
-              }
-
-              if ($env:ICON_AVAILABLE == 'true' -and (Test-Path "$workspaceRoot/icon.png")) {
-                  Copy-Item "$workspaceRoot/icon.png" "$workspaceRoot/android_app/icon.png" -Force -ErrorAction SilentlyContinue
-              }
-
-              Set-Location "$workspaceRoot/android_app"
-              if (-not (Test-Path "platforms/android")) {
-                  cordova platform add android
-              }
-
-              $source = $env:FINAL_SOURCE
-              $isUrl = $env:IS_URL
-              $appName = $env:APP_NAME
-              
-              $safeAppNameXml = [System.Security.SecurityElement]::Escape($appName)
-              $configPath = "config.xml"
-              if (Test-Path $configPath) {
-                  $configContent = Get-Content $configPath -Raw
-                  $configContent = $configContent -replace '<name>AppTempName</name>', "<name>$safeAppNameXml</name>"
-                  $configContent = $configContent -replace '<content src="index\.html"\s*/>', "<content src=`"$source`" />"
-
-                  if ($env:ICON_AVAILABLE == 'true') {
-                      $configContent = $configContent -replace '</widget>', "<icon src=`"icon.png`" />`n</widget>"
-                  }
-
-                  if ($isUrl == 'true') {
-                    $configContent = $configContent -replace '</widget>', "<access origin=`"*`" />`n<allow-navigation href=`"*`" />`n</widget>"
-                  } else {
-                    if (Test-Path "www") { Remove-Item "www\*" -Recurse -Force -ErrorAction SilentlyContinue }
-                    New-Item -ItemType Directory -Force -Path "www" | Out-Null
-                    Get-ChildItem -Path $workspaceRoot -Exclude "android_app", "icon.png", "src_win", ".git", ".github", "build_output" | Copy-Item -Destination "www" -Recurse -Force
-                  }
-                  Set-Content $configPath -Value $configContent -Encoding UTF8
-              }
-              
-              Write-Host ">>> מקמפל APK במצב Release..."
-              cordova build android --release
-
-              New-Item -ItemType Directory -Force -Path "$workspaceRoot/build_output" | Out-Null
-              $apkFile = Get-ChildItem -Path "platforms/android/app/build/outputs/apk/release" -Filter "*.apk" -File | Select-Object -First 1
-              if ($apkFile) {
-                  Copy-Item $apkFile.FullName -Destination "$workspaceRoot/build_output/$($env:SAFE_FILE_NAME).apk" -Force
-              }
+          $nameNode = $config.SelectSingleNode("//*[local-name()='name']")
+          if ($nameNode) {
+            $nameNode.InnerText = $env:APP_NAME
           }
 
-          Invoke-MassiveAndroidEngine -ScriptBlock $BuildAndroidLogic -ContextName "Android Build Engine"
+          $config.Save($configPath)
 
-      # ==========================================
-      # סיכום והעלאה
-      # ==========================================
-      - name: Generate Build Summary
+          cordova build android --debug
+
+          $apk = Get-ChildItem `
+            -Path (Join-Path $appDir 'platforms/android/app/build/outputs/apk/debug') `
+            -Filter '*.apk' -File |
+            Select-Object -First 1
+
+          if (-not $apk) {
+            throw 'לא נוצר קובץ APK.'
+          }
+
+          Copy-Item -Path $apk.FullName `
+            -Destination (Join-Path $outputDir ($env:SAFE_FILE_NAME + '.apk')) `
+            -Force
+
+      - name: Check build output
         shell: pwsh
         run: |
-          $workspaceRoot = $env:GITHUB_WORKSPACE
-          $outputDir = "$workspaceRoot/build_output"
-          $builtFile = Get-ChildItem -Path $outputDir -File | Select-Object -First 1
-          
-          if ($builtFile) {
-              $summary = @"
-          ### 🚀 דוח בנייה – מנוע Autonomous Massive Adaptive
-          | פרמטר מערכת | ערך מוגדר |
-          | :--- | :--- |
-          | **שם האפליקציה** | `$($env:APP_NAME)` |
-          | **גרסת תוכנה** | `$($env:APP_VERSION)` |
-          | **פלטפורמה** | `$($env:TARGET_PLATFORM)` |
-          | **קובץ פלט** | `$($builtFile.Name)` |
-          | **סטטוס** | ✅ **הושלם בהצלחה אוטונומית מלאה** |
-          "@
-              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary
+          $outputDir = Join-Path $env:GITHUB_WORKSPACE 'build_output'
+          $files = @(Get-ChildItem -Path $outputDir -File)
+
+          if ($files.Count -eq 0) {
+            throw 'תהליך הבנייה הסתיים בלי קובץ פלט.'
           }
 
-      - name: Create GitHub Release & Upload Asset
+          foreach ($file in $files) {
+            Write-Host "נוצר קובץ: $($file.FullName)"
+          }
+
+      - name: Generate build summary
+        shell: pwsh
+        run: |
+          $outputDir = Join-Path $env:GITHUB_WORKSPACE 'build_output'
+          $builtFile = Get-ChildItem -Path $outputDir -File | Select-Object -First 1
+
+          $summary = @"
+          ### דוח בנייה
+          | פרמטר | ערך |
+          | :--- | :--- |
+          | שם האפליקציה | $($env:APP_NAME) |
+          | גרסה | $($env:APP_VERSION) |
+          | פלטפורמה | $($env:TARGET_PLATFORM) |
+          | קובץ | $($builtFile.Name) |
+          | סטטוס | הצלחה |
+          "@
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary
+
+      - name: Create GitHub Release and upload file
         uses: softprops/action-gh-release@v2
         with:
           files: build_output/*
-          tag_name: v${{ env.APP_VERSION }}-build-${{ github.run_number }}
-          name: '${{ env.APP_NAME }} v${{ env.APP_VERSION }} (${{ env.TARGET_PLATFORM }})'
+          tag_name: v${{ inputs.app_version }}-build-${{ github.run_id }}-${{ github.run_attempt }}
+          name: '${{ inputs.app_name }} v${{ inputs.app_version }} (${{ inputs.target_platform }})'
           body: |
-            האפליקציה נוצרה בהצלחה.
+            קובץ האפליקציה נבנה בהצלחה.
           draft: false
           prerelease: false
-          #ינון
