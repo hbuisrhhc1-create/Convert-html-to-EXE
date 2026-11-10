@@ -1170,29 +1170,40 @@
           }
         }
 
-        /    // פתרון מותאם לאפליקציות אנדרואיד (WebView) ולדפדפנים ניידים
+                const suggestedName = name + (type === 'file' ? '.mystic' : '.txt.mystic');
+        const blob = new Blob([JSON.stringify(fileContainer)], { type: 'application/octet-stream' });
+        const file = new File([blob], suggestedName, { type: 'application/octet-stream' });
+
+        // פתיחת חלון השיתוף של אנדרואיד (מושלם לאפליקציות APK ומונע חסימות WebView)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: 'כספת מוצפנת',
+                    text: 'קובץ מוצפן ממערכת הכספת'
+                });
+                updateStatus(t.statusEncrypted);
+                clearAll();
+                return;
+            } catch (shareErr) {
+                if (shareErr.name === 'AbortError') return; // אם המשתמש ביטל את חלון השיתוף
+            }
+        }
+
+        // גיבוי רגיל אם השיתוף לא זמין
         const blobUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = blobUrl;
         link.download = suggestedName;
-        link.style.display = 'none';
-        
-        // הוספה ישירה ל-DOM והפעלה מדומה של לחיצה
         document.body.appendChild(link);
         link.click();
-        
-        // ניקוי אלמנטים לאחר ההורדה
         setTimeout(() => {
             document.body.removeChild(link);
             URL.revokeObjectURL(blobUrl);
-        }, 1500);
+        }, 1000);
 
         updateStatus(t.statusEncrypted);
         clearAll();
-
-    } catch (err) {
-        console.error("Encryption Details Error:", err);
-        alert(currentLang === 'he' ? 'שגיאה בתהליך ההצפנה' : 'Encryption error');
     }
 }
 
