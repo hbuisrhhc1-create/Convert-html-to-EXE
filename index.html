@@ -820,9 +820,9 @@
       toggleFabMenu();
 
       if (platform === 'windows') {
-        window.location.href = "https://github.com/hbuisrhhc1-create/Convert-html-to-EXE/releases/download/build-42841117035-1/default.exe";
+        window.location.href = "https://github.com/hbuisrhhc1-create/Text-Vault/releases/download/%D7%94%D7%95%D7%A8%D7%93%D7%94/-Output.zip";
       } else if (platform === 'android') {
-        window.location.href = "https://github.com/hbuisrhhc1-create/Convert-html-to-EXE/releases/download/build-42840638935-1/default.apk";
+        window.location.href = "https://github.com/hbuisrhhc1-create/Text-Vault/releases/download/%D7%94%D7%95%D7%A8%D7%93%D7%94/app-release.apk";
       }
     }
 
@@ -1170,27 +1170,7 @@
           }
         }
 
-                const suggestedName = name + (type === 'file' ? '.mystic' : '.txt.mystic');
-        const blob = new Blob([JSON.stringify(fileContainer)], { type: 'application/octet-stream' });
-        const file = new File([blob], suggestedName, { type: 'application/octet-stream' });
-
-        // פתיחת חלון השיתוף של אנדרואיד (מושלם לאפליקציות APK ומונע חסימות WebView)
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            try {
-                await navigator.share({
-                    files: [file],
-                    title: 'כספת מוצפנת',
-                    text: 'קובץ מוצפן ממערכת הכספת'
-                });
-                updateStatus(t.statusEncrypted);
-                clearAll();
-                return;
-            } catch (shareErr) {
-                if (shareErr.name === 'AbortError') return; // אם המשתמש ביטל את חלון השיתוף
-            }
-        }
-
-        // גיבוי רגיל אם השיתוף לא זמין
+        // fallback זמני להורדה ב-WebView ובמכשירים ניידים
         const blobUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = blobUrl;
@@ -1198,16 +1178,20 @@
         document.body.appendChild(link);
         link.click();
         setTimeout(() => {
-            document.body.removeChild(link);
-            URL.revokeObjectURL(blobUrl);
+          document.body.removeChild(link);
+          URL.revokeObjectURL(blobUrl);
         }, 1000);
 
         updateStatus(t.statusEncrypted);
         clearAll();
-    }
-}
 
-  function prepareFileForDecrypt(file) {
+      } catch (err) {
+        console.error("Encryption Details Error:", err);
+        alert(currentLang === 'he' ? 'שגיאה בתהליך ההצפנה' : 'Encryption error');
+      }
+    }
+
+    function prepareFileForDecrypt(file) {
       if (!file) return;
       pendingFileToDecrypt = file;
       document.getElementById('modalPasswordInput').value = '';
