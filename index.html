@@ -1170,26 +1170,31 @@
           }
         }
 
-        // fallback זמני להורדה ב-WebView ובמכשירים ניידים
+        /    // פתרון מותאם לאפליקציות אנדרואיד (WebView) ולדפדפנים ניידים
         const blobUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = blobUrl;
         link.download = suggestedName;
+        link.style.display = 'none';
+        
+        // הוספה ישירה ל-DOM והפעלה מדומה של לחיצה
         document.body.appendChild(link);
         link.click();
+        
+        // ניקוי אלמנטים לאחר ההורדה
         setTimeout(() => {
-          document.body.removeChild(link);
-          URL.revokeObjectURL(blobUrl);
-        }, 1000);
+            document.body.removeChild(link);
+            URL.revokeObjectURL(blobUrl);
+        }, 1500);
 
         updateStatus(t.statusEncrypted);
         clearAll();
 
-      } catch (err) {
+    } catch (err) {
         console.error("Encryption Details Error:", err);
         alert(currentLang === 'he' ? 'שגיאה בתהליך ההצפנה' : 'Encryption error');
-      }
     }
+}
 
     function prepareFileForDecrypt(file) {
       if (!file) return;
