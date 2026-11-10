@@ -1146,37 +1146,45 @@
           payload: encryptedPayload
         };
 
-        const suggestedName = name + (type === 'file' ? '.mystic' : '.txt.mystic');
+                const suggestedName = name + (type === 'file' ? '.mystic' : '.txt.mystic');
         const blob = new Blob([JSON.stringify(fileContainer)], { type: 'application/octet-stream' });
 
-        // פתיחת מנהל הקבצים בדפדפנים תומכים
-        if ('showSaveFilePicker' in window) {
+        // ניסיון לשיתוף הקובץ המוצפן כשהדפדפן/מכשיר תומכים בזה
+        const file = new File([blob], suggestedName, {
+          type: 'application/octet-stream'
+        });
+
+        if (
+          navigator.share &&
+          navigator.canShare &&
+          navigator.canShare({ files: [file] })
+        ) {
           try {
-            const handle = await window.showSaveFilePicker({
-              suggestedName: suggestedName,
-              types: [{
-                description: 'Mystic Encrypted File',
-                accept: { 'application/octet-stream': ['.mystic'] }
-              }],
+            await navigator.share({
+              files: [file],
+              title: currentLang === 'he' ? 'כספת מוצפנת' : 'Encrypted vault',
+              text: currentLang === 'he'
+                ? 'הקובץ המוצפן שלך'
+                : 'Your encrypted file'
             });
-            const writable = await handle.createWritable();
-            await writable.write(blob);
-            await writable.close();
+
             updateStatus(t.statusEncrypted);
             clearAll();
             return;
-          } catch (pickerErr) {
-            if (pickerErr.name === 'AbortError') return;
+          } catch (shareErr) {
+            if (shareErr.name === 'AbortError') return;
+            console.warn('Share failed, falling back to download:', shareErr);
           }
         }
 
-        // fallback זמני להורדה ב-WebView ובמכשירים ניידים
+        // גיבוי להורדה רגילה אם שיתוף קבצים לא נתמך
         const blobUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = blobUrl;
         link.download = suggestedName;
         document.body.appendChild(link);
         link.click();
+
         setTimeout(() => {
           document.body.removeChild(link);
           URL.revokeObjectURL(blobUrl);
