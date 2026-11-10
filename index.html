@@ -40,16 +40,16 @@
       --text-muted: #64748b;
     }
 
-  .vault-logo-container {
+    .vault-logo-container {
       text-align: center;
       margin-bottom: -5px;
     }
 
     .vault-logo {
-      width: 110px;          /* גודל מושלם ובולט לעין */
-      height: auto;          /* שומר על פרופורציות מקוריות */
+      width: 110px;
+      height: auto;
       display: inline-block;
-      filter: drop-shadow(0 10px 15px rgba(37, 99, 235, 0.2)); /* אפקט צל יוקרתי תואם לעיצוב */
+      filter: drop-shadow(0 10px 15px rgba(37, 99, 235, 0.2));
     }
 
     * {
@@ -146,7 +146,7 @@
     }
 
     .password-wrapper .text-input {
-      padding-left: 110px;
+      padding-left: 150px;
     }
 
     .text-input:focus, .select-input:focus {
@@ -466,8 +466,86 @@
       margin-top: 4px;
     }
 
-    .footer-credit span {
-      color: #3b82f6;
+    /* סגנונות לכפתור ההורדה הצף והתפריט הנפתח */
+    .fab-container {
+      position: fixed;
+      bottom: 25px;
+      left: 25px;
+      z-index: 1000;
+    }
+
+    .fab-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      border: none;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 8px 25px rgba(37, 99, 235, 0.4);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .fab-btn:hover {
+      transform: scale(1.08) rotate(5deg);
+      box-shadow: 0 12px 30px rgba(37, 99, 235, 0.55);
+    }
+
+    .fab-menu {
+      position: absolute;
+      bottom: 70px;
+      left: 0;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 10px;
+      width: 210px;
+      box-shadow: 0 15px 35px rgba(37, 99, 235, 0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(10px) scale(0.95);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .fab-menu.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0) scale(1);
+    }
+
+    .fab-menu-header {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 6px 10px;
+      border-bottom: 1px solid #f1f5f9;
+      margin-bottom: 2px;
+      text-align: right;
+    }
+
+    .fab-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      color: var(--text-main);
+      font-size: 0.92rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .fab-menu-item:hover {
+      background: #eff6ff;
+      color: var(--border-focus);
+      transform: translateX(-3px);
     }
   </style>
 </head>
@@ -488,6 +566,9 @@
       <div class="password-wrapper">
         <input type="password" class="text-input" id="passwordInput" placeholder="הכנס סיסמה להצפנה (לפחות 8 תווים)" oninput="checkPasswordStrength(this.value)">
         <div class="password-actions">
+          <button type="button" class="pwd-icon-btn" id="copyPwdBtn" onclick="copyPassword()" title="העתק סיסמה">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
           <button type="button" class="pwd-icon-btn" id="genPwdBtn" onclick="generatePassword()" title="צור סיסמה חזקה">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><circle cx="8" cy="8" r="1.5"></circle><circle cx="16" cy="16" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="16" cy="8" r="1.5"></circle><circle cx="8" cy="16" r="1.5"></circle></svg>
           </button>
@@ -562,8 +643,26 @@
     </div>
 
     <div class="footer-credit" id="footerCreditText">
-      <span>✦</span> פותח ונבנה על ידי <b>ינון דרייב</b>
+      פותח ונבנה על ידי <b>ינון דרייב</b>
     </div>
+  </div>
+
+  <!-- כפתור הורדה צף ותפריט בחירה -->
+  <div class="fab-container">
+    <div class="fab-menu" id="fabMenu">
+      <div class="fab-menu-header">בחר פלטפורמה להורדה</div>
+      <a href="#" class="fab-menu-item" onclick="downloadPlatform('windows', event)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+        מחשב Windows
+      </a>
+      <a href="#" class="fab-menu-item" onclick="downloadPlatform('android', event)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+        אפליקציית Android
+      </a>
+    </div>
+    <button class="fab-btn" id="fabBtn" onclick="toggleFabMenu()" title="הורד אפליקציה ותוכנה">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+    </button>
   </div>
 
   <div class="modal-overlay" id="decryptModal">
@@ -613,7 +712,7 @@
         decryptSectionTitle: "אזור פענוח קבצים מאובטח:",
         dropZoneText: "גרור לכאן קובץ .mystic או לחץ לבחירה לשחרור ופענוח",
         securityNote: "<b>אבטחה מלאה:</b> הצפנת AES-GCM מתקדמת מקומית בדפדפן (Zero-Knowledge).",
-        footerCredit: '<span>✦</span> פותח ונבנה על ידי <b>ינון דרייב</b>',
+        footerCredit: 'פותח ונבנה על ידי <b>ינון דרייב</b>',
         modalTitle: "נדרשת סיסמת פענוח",
         modalDesc: "הקובץ הנבחר מוצפן. אנא הכנס את הסיסמה שאיתה הוא ננעל כדי לשחרר ולפענח אותו:",
         modalPasswordPlaceholder: "הכנס סיסמה כאן...",
@@ -621,6 +720,7 @@
         modalConfirm: "פענח קובץ",
         statusNoText: "אין טקסט להעתקה",
         statusTextCopied: "הטקסט הועתק ללוח!",
+        statusPwdCopied: "הסיסמה הועתקה ללוח!",
         statusEncrypted: "הקובץ הוצפן קריפטוגרפית וירד בהצלחה!",
         statusDecryptedFile: (name) => `הקובץ "${name}" פוענח וירד בהצלחה!`,
         statusDecryptedText: "הטקסט פוענח ושוחזר בהצלחה!",
@@ -655,7 +755,7 @@
         decryptSectionTitle: "Secure File Decryption Area:",
         dropZoneText: "Drop .mystic file here or click to upload for release and decryption",
         securityNote: "<b>Full Security:</b> Advanced browser-based AES-GCM encryption (Zero-Knowledge).",
-        footerCredit: '<span>✦</span> Developed and built by <b>Inon Drive</b>',
+        footerCredit: 'Developed and built by <b>Inon Drive</b>',
         modalTitle: "Decryption Password Required",
         modalDesc: "The selected file is encrypted. Please enter the password used to lock it in order to release and decrypt:",
         modalPasswordPlaceholder: "Enter password here...",
@@ -663,6 +763,7 @@
         modalConfirm: "Decrypt File",
         statusNoText: "No text to copy",
         statusTextCopied: "Text copied to clipboard!",
+        statusPwdCopied: "Password copied to clipboard!",
         statusEncrypted: "File cryptographically encrypted and downloaded successfully!",
         statusDecryptedFile: (name) => `File "${name}" decrypted and downloaded successfully!`,
         statusDecryptedText: "Text decrypted and restored successfully!",
@@ -690,13 +791,40 @@
     });
 
     // רישום Service Worker להתקנת אפליקציה וניקוי מטמון אוטומטי
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(err => {
-        console.log('Service Worker registration failed: ', err);
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => {
+          console.log('Service Worker registration failed: ', err);
+        });
       });
+    }
+
+    // פתיחה וסגירה של תפריט ההורדות הצף
+    function toggleFabMenu() {
+      const menu = document.getElementById('fabMenu');
+      menu.classList.toggle('active');
+    }
+
+    // סגירת התפריט בלחיצה מחוץ לכפתור
+    window.addEventListener('click', function(e) {
+      const container = document.querySelector('.fab-container');
+      const menu = document.getElementById('fabMenu');
+      if (container && !container.contains(e.target)) {
+        menu.classList.remove('active');
+      }
     });
-  }
+
+    // טיפול בלחיצה על אחת האפשרויות בתפריט (עם הקישורים המעודכנים שלך)
+    function downloadPlatform(platform, event) {
+      event.preventDefault();
+      toggleFabMenu();
+
+      if (platform === 'windows') {
+        window.location.href = "https://github.com/hbuisrhhc1-create/Text-Vault/releases/download/%D7%94%D7%95%D7%A8%D7%93%D7%94/-Output.zip";
+      } else if (platform === 'android') {
+        window.location.href = "https://github.com/hbuisrhhc1-create/Text-Vault/releases/download/%D7%94%D7%95%D7%A8%D7%93%D7%94/app-release.apk";
+      }
+    }
 
     function savePreferences() {
       const rounds = document.getElementById('roundsSelect').value;
@@ -714,6 +842,18 @@
       const words = text.trim() ? text.trim().split(/\s+/).length : 0;
       document.getElementById('charCount').innerText = t.charCount(chars);
       document.getElementById('wordCount').innerText = t.wordCount(words);
+    }
+
+    function copyPassword() {
+      const pwdInput = document.getElementById('passwordInput');
+      const t = translations[currentLang];
+      if (!pwdInput.value) {
+        alert(currentLang === 'he' ? 'אין סיסמה להעתקה' : 'No password to copy');
+        return;
+      }
+      navigator.clipboard.writeText(pwdInput.value).then(() => {
+        updateStatus(t.statusPwdCopied);
+      });
     }
 
     function togglePasswordVisibility() {
@@ -1006,17 +1146,43 @@
           payload: encryptedPayload
         };
 
+        const suggestedName = name + (type === 'file' ? '.mystic' : '.txt.mystic');
         const blob = new Blob([JSON.stringify(fileContainer)], { type: 'application/octet-stream' });
+
+        // פתיחת מנהל הקבצים בדפדפנים תומכים
+        if ('showSaveFilePicker' in window) {
+          try {
+            const handle = await window.showSaveFilePicker({
+              suggestedName: suggestedName,
+              types: [{
+                description: 'Mystic Encrypted File',
+                accept: { 'application/octet-stream': ['.mystic'] }
+              }],
+            });
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            updateStatus(t.statusEncrypted);
+            clearAll();
+            return;
+          } catch (pickerErr) {
+            if (pickerErr.name === 'AbortError') return;
+          }
+        }
+
+        // fallback זמני להורדה ב-WebView ובמכשירים ניידים
+        const blobUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = name + (type === 'file' ? '.mystic' : '.txt.mystic');
+        link.href = blobUrl;
+        link.download = suggestedName;
+        document.body.appendChild(link);
         link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(blobUrl);
+        }, 1000);
 
         updateStatus(t.statusEncrypted);
-
-        // ==========================================
-        // ניקוי אוטומטי של כל השדות מיד לאחר ההצפנה וההורדה:
-        // ==========================================
         clearAll();
 
       } catch (err) {
@@ -1024,6 +1190,7 @@
         alert(currentLang === 'he' ? 'שגיאה בתהליך ההצפנה' : 'Encryption error');
       }
     }
+
     function prepareFileForDecrypt(file) {
       if (!file) return;
       pendingFileToDecrypt = file;
@@ -1063,12 +1230,36 @@
           closeDecryptModal();
 
           if (parsed.type === 'file') {
+            const suggestedName = parsed.fileName || 'decrypted_file';
             const blob = new Blob([decryptedBytes]);
+
+            if ('showSaveFilePicker' in window) {
+              try {
+                const handle = await window.showSaveFilePicker({
+                  suggestedName: suggestedName
+                });
+                const writable = await handle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                updateStatus(t.statusDecryptedFile(suggestedName));
+                return;
+              } catch (pickerErr) {
+                if (pickerErr.name === 'AbortError') return;
+              }
+            }
+
+            const blobUrl = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = parsed.fileName || 'decrypted_file';
+            link.href = blobUrl;
+            link.download = suggestedName;
+            document.body.appendChild(link);
             link.click();
-            updateStatus(t.statusDecryptedFile(parsed.fileName || 'file'));
+            setTimeout(() => {
+              document.body.removeChild(link);
+              URL.revokeObjectURL(blobUrl);
+            }, 1000);
+
+            updateStatus(t.statusDecryptedFile(suggestedName));
           } else {
             const textContent = new TextDecoder().decode(decryptedBytes);
             document.getElementById('textInput').value = textContent;
