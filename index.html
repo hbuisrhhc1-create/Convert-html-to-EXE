@@ -1,13 +1,10 @@
 <!DOCTYPE html>
-<html lang="he" dir="rtl">
+<html lang="he" dir="rtl" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title id="pageTitle">כספת טקסט וקבצים בלעדית</title>
-  <!-- גיבוי ל-SVG (למחשב ולדפדפנים תומכים) -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  
-  <!-- גיבוי ל-PNG (לטלפונים ניידים ולדפדפנים אחרים) -->
   <link rel="alternate icon" type="image/png" href="favicon.png">
   <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -26,11 +23,19 @@
       40%, 80% { transform: translateX(6px); }
     }
 
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translateY(20px); }
+      15% { opacity: 1; transform: translateY(0); }
+      85% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-20px); }
+    }
+
     .shake {
       animation: shake 0.4s ease-in-out;
     }
 
     :root {
+      --bg-gradient: linear-gradient(-45deg, #dbeafe, #eff6ff, #bfdbfe, #93c5fd);
       --card-bg: rgba(255, 255, 255, 0.85);
       --input-bg: #f0f7ff;
       --border-color: #bfdbfe;
@@ -38,18 +43,27 @@
       --accent-blue: #2563eb;
       --text-main: #1e3a8a;
       --text-muted: #64748b;
+      --btn-secondary-bg: #ffffff;
+      --btn-secondary-hover: #eff6ff;
+      --decrypt-bg: rgba(239, 246, 255, 0.6);
+      --dropzone-bg: #ffffff;
+      --modal-bg: #ffffff;
     }
 
-    .vault-logo-container {
-      text-align: center;
-      margin-bottom: -5px;
-    }
-
-    .vault-logo {
-      width: 110px;
-      height: auto;
-      display: inline-block;
-      filter: drop-shadow(0 10px 15px rgba(37, 99, 235, 0.2));
+    [data-theme="dark"] {
+      --bg-gradient: linear-gradient(-45deg, #0f172a, #1e293b, #090d16, #111827);
+      --card-bg: rgba(30, 41, 59, 0.85);
+      --input-bg: #0f172a;
+      --border-color: #334155;
+      --border-focus: #3b82f6;
+      --accent-blue: #3b82f6;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --btn-secondary-bg: #1e293b;
+      --btn-secondary-hover: #334155;
+      --decrypt-bg: rgba(15, 23, 42, 0.6);
+      --dropzone-bg: #1e293b;
+      --modal-bg: #1e293b;
     }
 
     * {
@@ -57,10 +71,11 @@
       margin: 0;
       padding: 0;
       font-family: 'Heebo', sans-serif;
+      transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
     }
 
     body {
-      background: linear-gradient(-45deg, #dbeafe, #eff6ff, #bfdbfe, #93c5fd);
+      background: var(--bg-gradient);
       background-size: 400% 400%;
       animation: gradientShift 15s ease infinite;
       min-height: 100vh;
@@ -77,7 +92,7 @@
       background-color: var(--card-bg);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--border-color);
       border-radius: 32px;
       padding: 36px 30px;
       box-shadow: 0 20px 40px rgba(37, 99, 235, 0.1), 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -88,12 +103,18 @@
 
     .top-bar {
       display: flex;
-      justify-content: flex-start;
+      justify-content: space-between;
       align-items: center;
     }
 
-    .lang-badge {
-      background: #ffffff;
+    .top-bar-group {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .lang-badge, .theme-badge {
+      background: var(--btn-secondary-bg);
       border: 1px solid var(--border-color);
       color: var(--text-main);
       padding: 8px 16px;
@@ -105,12 +126,11 @@
       gap: 8px;
       cursor: pointer;
       box-shadow: 0 2px 5px rgba(37,99,235,0.05);
-      transition: all 0.25s ease;
     }
 
-    .lang-badge:hover {
+    .lang-badge:hover, .theme-badge:hover {
       border-color: var(--border-focus);
-      background: #f8fafc;
+      background: var(--btn-secondary-hover);
     }
 
     .main-title {
@@ -118,7 +138,7 @@
       font-size: 2.3rem;
       font-weight: 700;
       letter-spacing: -0.5px;
-      color: #1e3a8a;
+      color: var(--text-main);
       margin-bottom: 4px;
     }
 
@@ -142,7 +162,6 @@
       color: var(--text-main);
       font-size: 1rem;
       outline: none;
-      transition: all 0.3s ease;
     }
 
     .password-wrapper .text-input {
@@ -151,12 +170,11 @@
 
     .text-input:focus, .select-input:focus {
       border-color: var(--border-focus);
-      background-color: #ffffff;
       box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
     }
 
     .text-input::placeholder {
-      color: #94a3b8;
+      color: var(--text-muted);
     }
 
     .password-actions {
@@ -169,9 +187,9 @@
     }
 
     .pwd-icon-btn {
-      background: #ffffff;
+      background: var(--btn-secondary-bg);
       border: 1px solid var(--border-color);
-      color: #3b82f6;
+      color: var(--accent-blue);
       cursor: pointer;
       width: 36px;
       height: 36px;
@@ -179,13 +197,11 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.2s ease;
       box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
 
     .pwd-icon-btn:hover {
-      background: #eff6ff;
-      color: #1d4ed8;
+      background: var(--btn-secondary-hover);
       border-color: var(--border-focus);
       transform: scale(1.05);
     }
@@ -200,7 +216,7 @@
     .strength-bar-bg {
       width: 100%;
       height: 6px;
-      background-color: #e2e8f0;
+      background-color: var(--border-color);
       border-radius: 3px;
       overflow: hidden;
     }
@@ -240,7 +256,8 @@
       border-radius: 10px;
       cursor: pointer;
       font-size: 0.9rem;
-      background-color: #ffffff;
+      background-color: var(--btn-secondary-bg);
+      color: var(--text-main);
     }
 
     .textarea-input {
@@ -254,17 +271,15 @@
       font-size: 1rem;
       resize: vertical;
       outline: none;
-      transition: all 0.3s ease;
     }
 
     .textarea-input:focus {
       border-color: var(--border-focus);
-      background-color: #ffffff;
       box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
     }
 
     .textarea-input::placeholder {
-      color: #94a3b8;
+      color: var(--text-muted);
     }
 
     .stats-row {
@@ -283,7 +298,7 @@
 
     .btn-secondary {
       flex: 1;
-      background: #ffffff;
+      background: var(--btn-secondary-bg);
       border: 1px solid var(--border-color);
       color: var(--text-main);
       padding: 14px 20px;
@@ -296,11 +311,10 @@
       justify-content: center;
       gap: 10px;
       box-shadow: 0 2px 5px rgba(37,99,235,0.03);
-      transition: all 0.25s ease;
     }
 
     .btn-secondary:hover {
-      background: #eff6ff;
+      background: var(--btn-secondary-hover);
       border-color: var(--border-focus);
       color: var(--border-focus);
       transform: translateY(-2px);
@@ -321,7 +335,6 @@
       justify-content: center;
       gap: 12px;
       box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
-      transition: all 0.3s ease;
     }
 
     .btn-primary:hover {
@@ -331,7 +344,7 @@
     }
 
     .decrypt-section-box {
-      background: rgba(239, 246, 255, 0.6);
+      background: var(--decrypt-bg);
       border: 1px solid var(--border-color);
       border-radius: 20px;
       padding: 18px;
@@ -357,17 +370,16 @@
       color: var(--text-muted);
       font-size: 0.95rem;
       cursor: pointer;
-      background: #ffffff;
+      background: var(--dropzone-bg);
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
-      transition: all 0.3s ease;
     }
 
     .drop-zone:hover, .file-upload-box:hover {
       border-color: var(--border-focus);
-      background: #eff6ff;
+      background: var(--btn-secondary-hover);
       color: var(--border-focus);
     }
 
@@ -395,7 +407,7 @@
     }
 
     .modal-card {
-      background: #ffffff;
+      background: var(--modal-bg);
       border-radius: 24px;
       padding: 30px;
       width: 90%;
@@ -440,13 +452,32 @@
       margin-top: 4px;
     }
 
-    .status-msg {
-      text-align: center;
-      color: var(--text-muted);
+    .toast-container {
+      position: fixed;
+      bottom: 25px;
+      right: 25px;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .toast {
+      background: #1e293b;
+      color: #ffffff;
+      padding: 12px 20px;
+      border-radius: 12px;
       font-size: 0.9rem;
       font-weight: 500;
-      min-height: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: fadeInOut 3.5s ease forwards;
     }
+
+    .toast.success { background: #059669; }
+    .toast.error { background: #dc2626; }
 
     .security-note {
       text-align: center;
@@ -466,7 +497,6 @@
       margin-top: 4px;
     }
 
-    /* סגנונות לכפתור ההורדה הצף והתפריט הנפתח */
     .fab-container {
       position: fixed;
       bottom: 25px;
@@ -486,24 +516,22 @@
       justify-content: center;
       cursor: pointer;
       box-shadow: 0 8px 25px rgba(37, 99, 235, 0.4);
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .fab-btn:hover {
       transform: scale(1.08) rotate(5deg);
-      box-shadow: 0 12px 30px rgba(37, 99, 235, 0.55);
     }
 
     .fab-menu {
       position: absolute;
       bottom: 70px;
       left: 0;
-      background: #ffffff;
+      background: var(--modal-bg);
       border: 1px solid var(--border-color);
       border-radius: 20px;
       padding: 10px;
-      width: 210px;
-      box-shadow: 0 15px 35px rgba(37, 99, 235, 0.15);
+      width: 230px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -524,7 +552,7 @@
       font-weight: 600;
       color: var(--text-muted);
       padding: 6px 10px;
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--border-color);
       margin-bottom: 2px;
       text-align: right;
     }
@@ -539,24 +567,43 @@
       font-size: 0.92rem;
       font-weight: 500;
       text-decoration: none;
-      transition: all 0.2s ease;
     }
 
     .fab-menu-item:hover {
-      background: #eff6ff;
-      color: var(--border-focus);
-      transform: translateX(-3px);
+      background: var(--btn-secondary-hover);
+      color: var(--accent-blue);
+    }
+
+    .fab-menu-item.disabled {
+      color: var(--text-muted);
+      background-color: var(--input-bg);
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    .fab-menu-item.disabled:hover {
+      background-color: var(--input-bg);
+      color: var(--text-muted);
+      transform: none;
     }
   </style>
 </head>
 <body>
 
+  <div class="toast-container" id="toastContainer"></div>
+
   <div class="container">
     <div class="top-bar">
-      <div class="lang-badge" onclick="toggleLanguage()">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-        <span id="langText">עברית</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      <div class="top-bar-group">
+        <div class="lang-badge" onclick="toggleLanguage()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          <span id="langText">עברית</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
+        <div class="theme-badge" onclick="toggleTheme()" title="החלף מצב תצוגה">
+          <svg id="themeIconSvg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          <span id="themeText">מצב כהה</span>
+        </div>
       </div>
     </div>
 
@@ -635,29 +682,26 @@
       </div>
     </div>
 
-    <div class="status-msg" id="statusMsg"></div>
-
     <div class="security-note" id="securityNoteText">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
       <b>אבטחה מלאה:</b> הצפנת AES-GCM מתקדמת מקומית בדפדפן (Zero-Knowledge).
     </div>
 
     <div class="footer-credit" id="footerCreditText">
-      פותח ונבנה על ידי <b>ינון דרייב</b>
+      פותח ונבנה על ידי <b>ינון דרייב</b> ©
     </div>
   </div>
 
-  <!-- כפתור הורדה צף ותפריט בחירה -->
   <div class="fab-container">
     <div class="fab-menu" id="fabMenu">
-      <div class="fab-menu-header">בחר פלטפורמה להורדה</div>
+      <div class="fab-menu-header" id="fabHeaderTitle">בחר פלטפורמה להורדה</div>
       <a href="#" class="fab-menu-item" onclick="downloadPlatform('windows', event)">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
         מחשב Windows
       </a>
-      <a href="#" class="fab-menu-item" onclick="downloadPlatform('android', event)">
+      <a href="javascript:void(0)" class="fab-menu-item disabled" id="androidMenuItem" onclick="downloadPlatform('android', event)" title="האפליקציה כרגע לא זמינה להורדה">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
-        אפליקציית Android
+        <span id="androidBtnText">Android (זמנית לא זמין)</span>
       </a>
     </div>
     <button class="fab-btn" id="fabBtn" onclick="toggleFabMenu()" title="הורד אפליקציה ותוכנה">
@@ -687,6 +731,7 @@
     let rawFileData = null;
     let rawFileName = "";
     let currentLang = localStorage.getItem('mystic_lang') || 'he';
+    let currentTheme = localStorage.getItem('mystic_theme') || 'light';
     let pendingFileToDecrypt = null;
 
     const translations = {
@@ -694,6 +739,8 @@
         pageTitle: "כספת טקסט וקבצים בלעדית",
         mainTitle: "כספת טקסט וקבצים בלעדית",
         langText: "עברית",
+        themeDark: "מצב כהה",
+        themeLight: "מצב בהיר",
         passwordPlaceholder: "הכנס סיסמה להצפנה (לפחות 8 תווים)",
         strengthWait: "חוזק סיסמה: ממתין להקלדה...",
         strengthVeryWeak: "חלשה מאוד",
@@ -712,15 +759,16 @@
         decryptSectionTitle: "אזור פענוח קבצים מאובטח:",
         dropZoneText: "גרור לכאן קובץ .mystic או לחץ לבחירה לשחרור ופענוח",
         securityNote: "<b>אבטחה מלאה:</b> הצפנת AES-GCM מתקדמת מקומית בדפדפן (Zero-Knowledge).",
-        footerCredit: 'פותח ונבנה על ידי <b>ינון דרייב</b>',
+        footerCredit: 'פותח ונבנה על ידי <b>ינון דרייב</b> ©',
         modalTitle: "נדרשת סיסמת פענוח",
         modalDesc: "הקובץ הנבחר מוצפן. אנא הכנס את הסיסמה שאיתה הוא ננעל כדי לשחרר ולפענח אותו:",
         modalPasswordPlaceholder: "הכנס סיסמה כאן...",
         modalCancel: "ביטול",
         modalConfirm: "פענח קובץ",
+        fabHeader: "בחר פלטפורמה להורדה",
         statusNoText: "אין טקסט להעתקה",
-        statusTextCopied: "הטקסט הועתק ללוח!",
-        statusPwdCopied: "הסיסמה הועתקה ללוח!",
+        statusTextCopied: "הטקסט הועתק ללוח בהצלחה!",
+        statusPwdCopied: "הסיסמה הועתקה ללוח בהצלחה!",
         statusEncrypted: "הקובץ הוצפן קריפטוגרפית וירד בהצלחה!",
         statusDecryptedFile: (name) => `הקובץ "${name}" פוענח וירד בהצלחה!`,
         statusDecryptedText: "הטקסט פוענח ושוחזר בהצלחה!",
@@ -731,12 +779,15 @@
         statusFileReady: "הקובץ מוכן להצפנה",
         selectedFilePrefix: "נבחר קובץ: ",
         charCount: (n) => `תווים: ${n}`,
-        wordCount: (n) => `מילים: ${n}`
+        wordCount: (n) => `מילים: ${n}`,
+        androidBtnText: "Android (זמנית לא זמין)"
       },
       en: {
         pageTitle: "Exclusive Text & File Vault",
         mainTitle: "Exclusive Text & File Vault",
         langText: "English",
+        themeDark: "Dark Mode",
+        themeLight: "Light Mode",
         passwordPlaceholder: "Enter encryption password (at least 8 chars)",
         strengthWait: "Password strength: waiting for input...",
         strengthVeryWeak: "Very Weak",
@@ -755,15 +806,16 @@
         decryptSectionTitle: "Secure File Decryption Area:",
         dropZoneText: "Drop .mystic file here or click to upload for release and decryption",
         securityNote: "<b>Full Security:</b> Advanced browser-based AES-GCM encryption (Zero-Knowledge).",
-        footerCredit: 'Developed and built by <b>Inon Drive</b>',
+        footerCredit: 'Developed and built by <b>Inon Drive</b> ©',
         modalTitle: "Decryption Password Required",
         modalDesc: "The selected file is encrypted. Please enter the password used to lock it in order to release and decrypt:",
         modalPasswordPlaceholder: "Enter password here...",
         modalCancel: "Cancel",
         modalConfirm: "Decrypt File",
+        fabHeader: "Select platform to download",
         statusNoText: "No text to copy",
-        statusTextCopied: "Text copied to clipboard!",
-        statusPwdCopied: "Password copied to clipboard!",
+        statusTextCopied: "Text copied to clipboard successfully!",
+        statusPwdCopied: "Password copied to clipboard successfully!",
         statusEncrypted: "File cryptographically encrypted and downloaded successfully!",
         statusDecryptedFile: (name) => `File "${name}" decrypted and downloaded successfully!`,
         statusDecryptedText: "Text decrypted and restored successfully!",
@@ -774,38 +826,60 @@
         statusFileReady: "File ready for encryption",
         selectedFilePrefix: "Selected file: ",
         charCount: (n) => `Chars: ${n}`,
-        wordCount: (n) => `Words: ${n}`
+        wordCount: (n) => `Words: ${n}`,
+        androidBtnText: "Android (Temporarily Unavailable)"
       }
     };
 
-    // Initialize UI settings from LocalStorage
     window.addEventListener('DOMContentLoaded', () => {
+      document.documentElement.setAttribute('data-theme', currentTheme);
       if (currentLang === 'en') {
         applyLanguageSettings();
       }
-    
+      updateThemeUI();
       const savedRounds = localStorage.getItem('mystic_rounds');
       if (savedRounds) {
         document.getElementById('roundsSelect').value = savedRounds;
       }
     });
 
-    // רישום Service Worker להתקנת אפליקציה וניקוי מטמון אוטומטי
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch(err => {
-          console.log('Service Worker registration failed: ', err);
-        });
-      });
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.innerHTML = message;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 400);
+      }, 3500);
     }
 
-    // פתיחה וסגירה של תפריט ההורדות הצף
+    function toggleTheme() {
+      currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+      localStorage.setItem('mystic_theme', currentTheme);
+      document.documentElement.setAttribute('data-theme', currentTheme);
+      updateThemeUI();
+    }
+
+    function updateThemeUI() {
+      const themeText = document.getElementById('themeText');
+      const themeIconSvg = document.getElementById('themeIconSvg');
+      const t = translations[currentLang];
+      if (currentTheme === 'dark') {
+        themeText.innerText = t.themeLight;
+        themeIconSvg.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+      } else {
+        themeText.innerText = t.themeDark;
+        themeIconSvg.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+      }
+    }
+
     function toggleFabMenu() {
       const menu = document.getElementById('fabMenu');
       menu.classList.toggle('active');
     }
 
-    // סגירת התפריט בלחיצה מחוץ לכפתור
     window.addEventListener('click', function(e) {
       const container = document.querySelector('.fab-container');
       const menu = document.getElementById('fabMenu');
@@ -814,25 +888,18 @@
       }
     });
 
-    // טיפול בלחיצה על אחת האפשרויות בתפריט (עם הקישורים המעודכנים שלך)
     function downloadPlatform(platform, event) {
       event.preventDefault();
+      if (platform === 'android') return false;
       toggleFabMenu();
-
       if (platform === 'windows') {
         window.location.href = "https://github.com/hbuisrhhc1-create/Text-Vault/releases/download/%D7%94%D7%95%D7%A8%D7%93%D7%94/-Output.zip";
-      } else if (platform === 'android') {
-        window.location.href = "https://github.com/hbuisrhhc1-create/Text-Vault/releases/download/%D7%94%D7%95%D7%A8%D7%93%D7%94/app-release.apk";
       }
     }
 
     function savePreferences() {
       const rounds = document.getElementById('roundsSelect').value;
       localStorage.setItem('mystic_rounds', rounds);
-    }
-
-    function updateStatus(text) {
-      document.getElementById('statusMsg').innerText = text;
     }
 
     function updateTextStats() {
@@ -844,16 +911,50 @@
       document.getElementById('wordCount').innerText = t.wordCount(words);
     }
 
+    // התיקון המלא והחסין לשגיאות עבור כפתור העתקת הסיסמה
     function copyPassword() {
       const pwdInput = document.getElementById('passwordInput');
       const t = translations[currentLang];
+      
       if (!pwdInput.value) {
-        alert(currentLang === 'he' ? 'אין סיסמה להעתקה' : 'No password to copy');
+        showToast(currentLang === 'he' ? 'אין סיסמה להעתקה' : 'No password to copy', 'error');
         return;
       }
-      navigator.clipboard.writeText(pwdInput.value).then(() => {
-        updateStatus(t.statusPwdCopied);
-      });
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(pwdInput.value).then(() => {
+          showToast(t.statusPwdCopied, 'success');
+        }).catch(() => {
+          fallbackCopyPassword(pwdInput.value, t);
+        });
+      } else {
+        fallbackCopyPassword(pwdInput.value, t);
+      }
+    }
+
+    function fallbackCopyPassword(text, t) {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.top = "0";
+      textArea.style.left = "0";
+      textArea.style.opacity = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          showToast(t.statusPwdCopied, 'success');
+        } else {
+          showToast(currentLang === 'he' ? 'שגיאה בהעתקת הסיסמה' : 'Error copying password', 'error');
+        }
+      } catch (err) {
+        showToast(currentLang === 'he' ? 'שגיאה בהעתקת הסיסמה' : 'Error copying password', 'error');
+      }
+      
+      document.body.removeChild(textArea);
     }
 
     function togglePasswordVisibility() {
@@ -879,7 +980,7 @@
       pwdInput.type = 'text';
       document.getElementById('eyeIconSvg').innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
       checkPasswordStrength(password);
-      updateStatus(translations[currentLang].statusRandomPwd);
+      showToast(translations[currentLang].statusRandomPwd, 'success');
     }
 
     function checkPasswordStrength(password) {
@@ -928,7 +1029,8 @@
       currentLang = currentLang === 'he' ? 'en' : 'he';
       localStorage.setItem('mystic_lang', currentLang);
       applyLanguageSettings();
-      updateStatus(translations[currentLang].statusLangChanged);
+      updateThemeUI();
+      showToast(translations[currentLang].statusLangChanged, 'success');
     }
 
     function applyLanguageSettings() {
@@ -948,6 +1050,8 @@
       setElementText('pageTitle', t.pageTitle);
       setElementText('mainTitle', t.mainTitle);
       setElementText('langText', t.langText);
+      setElementText('androidBtnText', t.androidBtnText);
+      setElementText('fabHeaderTitle', t.fabHeader);
       
       const pwdInput = document.getElementById('passwordInput');
       if (pwdInput) pwdInput.placeholder = t.passwordPlaceholder;
@@ -986,19 +1090,10 @@
       updateTextStats();
     }
 
-    function handleDragOver(e) {
-      e.preventDefault();
-      document.getElementById('fileUploadBox').style.borderColor = '#2563eb';
-    }
-
-    function handleDragLeave(e) {
-      e.preventDefault();
-      document.getElementById('fileUploadBox').style.borderColor = '#bfdbfe';
-    }
-
+    function handleDragOver(e) { e.preventDefault(); }
+    function handleDragLeave(e) { e.preventDefault(); }
     function handleFileDrop(e) {
       e.preventDefault();
-      document.getElementById('fileUploadBox').style.borderColor = '#bfdbfe';
       if (e.dataTransfer.files && e.dataTransfer.files[0]) {
         updateFileSelection(e.dataTransfer.files[0]);
       }
@@ -1012,7 +1107,7 @@
         reader.onload = function(e) {
           rawFileData = e.target.result;
           document.getElementById('selectedFileName').innerText = `${t.selectedFilePrefix}${file.name}`;
-          updateStatus(t.statusFileReady);
+          showToast(t.statusFileReady, 'success');
         };
         reader.readAsArrayBuffer(file);
       }
@@ -1032,41 +1127,25 @@
       rawFileName = "";
       checkPasswordStrength('');
       updateTextStats();
-      updateStatus(t.statusCleared);
+      showToast(t.statusCleared, 'success');
     }
 
     function copyText() {
       const t = translations[currentLang];
       const text = document.getElementById('textInput').value;
-      if (!text) return updateStatus(t.statusNoText);
+      if (!text) {
+        showToast(t.statusNoText, 'error');
+        return;
+      }
       navigator.clipboard.writeText(text);
-      updateStatus(t.statusTextCopied);
+      showToast(t.statusTextCopied, 'success');
     }
 
-    // --- Cryptographic Helper Functions (Web Crypto API: PBKDF2 + AES-GCM) ---
     async function deriveKey(password, salt, iterations) {
       const enc = new TextEncoder();
       const cryptoSubtle = window.crypto.subtle || window.subtle;
-      
-      const keyMaterial = await cryptoSubtle.importKey(
-        "raw",
-        enc.encode(password),
-        { name: "PBKDF2" },
-        false,
-        ["deriveKey"]
-      );
-      return cryptoSubtle.deriveKey(
-        {
-          name: "PBKDF2",
-          salt: salt,
-          iterations: parseInt(iterations),
-          hash: "SHA-256"
-        },
-        keyMaterial,
-        { name: "AES-GCM", length: 256 },
-        false,
-        ["encrypt", "decrypt"]
-      );
+      const keyMaterial = await cryptoSubtle.importKey("raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]);
+      return cryptoSubtle.deriveKey({ name: "PBKDF2", salt: salt, iterations: parseInt(iterations), hash: "SHA-256" }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
     }
 
     async function encryptData(secretData, password, iterations) {
@@ -1074,18 +1153,8 @@
       const iv = window.crypto.getRandomValues(new Uint8Array(12));
       const key = await deriveKey(password, salt, iterations);
       const cryptoSubtle = window.crypto.subtle || window.subtle;
-      
-      const encryptedContent = await cryptoSubtle.encrypt(
-        { name: "AES-GCM", iv: iv },
-        key,
-        secretData
-      );
-
-      return {
-        salt: Array.from(salt),
-        iv: Array.from(iv),
-        data: Array.from(new Uint8Array(encryptedContent))
-      };
+      const encryptedContent = await cryptoSubtle.encrypt({ name: "AES-GCM", iv: iv }, key, secretData);
+      return { salt: Array.from(salt), iv: Array.from(iv), data: Array.from(new Uint8Array(encryptedContent)) };
     }
 
     async function decryptData(encryptedObj, password, iterations) {
@@ -1093,16 +1162,8 @@
       const iv = new Uint8Array(encryptedObj.iv);
       const data = new Uint8Array(encryptedObj.data);
       const cryptoSubtle = window.crypto.subtle || window.subtle;
-      
       const key = await deriveKey(password, salt, iterations);
-      
-      const decryptedContent = await cryptoSubtle.decrypt(
-        { name: "AES-GCM", iv: iv },
-        key,
-        data
-      );
-
-      return decryptedContent;
+      return await cryptoSubtle.decrypt({ name: "AES-GCM", iv: iv }, key, data);
     }
 
     async function encryptAndDownload() {
@@ -1113,89 +1174,49 @@
       const rounds = roundsElement ? roundsElement.value : '50000';
 
       if (!password || password.length < 8) {
-        alert(currentLang === 'he' ? 'אנא הכנס סיסמה בת 8 תווים לפחות' : 'Please enter a password of at least 8 characters');
+        showToast(currentLang === 'he' ? 'אנא הכנס סיסמה בת 8 תווים לפחות' : 'Please enter a password of at least 8 characters', 'error');
         return;
       }
 
       if (!rawFileData && !text) {
-        alert(currentLang === 'he' ? 'אנא הכנס טקסט או בחר קובץ להצפנה' : 'Please enter text or select a file to encrypt');
+        showToast(currentLang === 'he' ? 'אנא הכנס טקסט או בחר קובץ להצפנה' : 'Please enter text or select a file to encrypt', 'error');
         return;
       }
 
       try {
-        let contentBytes;
-        let type = 'text';
-        let name = 'vault';
-
-        if (rawFileData) {
-          contentBytes = rawFileData;
-          type = 'file';
-          name = rawFileName;
-        } else {
-          contentBytes = new TextEncoder().encode(text);
-          type = 'text';
-        }
+        let contentBytes = rawFileData ? rawFileData : new TextEncoder().encode(text);
+        let type = rawFileData ? 'file' : 'text';
+        let name = rawFileData ? rawFileName : 'vault';
 
         const encryptedPayload = await encryptData(contentBytes, password, rounds);
-
-        const fileContainer = {
-          version: 2,
-          rounds: rounds,
-          type: type,
-          fileName: name,
-          payload: encryptedPayload
-        };
-
-                const suggestedName = name + (type === 'file' ? '.mystic' : '.txt.mystic');
+        const fileContainer = { version: 2, rounds: rounds, type: type, fileName: name, payload: encryptedPayload };
+        const suggestedName = name + (type === 'file' ? '.mystic' : '.txt.mystic');
         const blob = new Blob([JSON.stringify(fileContainer)], { type: 'application/octet-stream' });
+        const file = new File([blob], suggestedName, { type: 'application/octet-stream' });
 
-        // ניסיון לשיתוף הקובץ המוצפן כשהדפדפן/מכשיר תומכים בזה
-        const file = new File([blob], suggestedName, {
-          type: 'application/octet-stream'
-        });
-
-        if (
-          navigator.share &&
-          navigator.canShare &&
-          navigator.canShare({ files: [file] })
-        ) {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
-            await navigator.share({
-              files: [file],
-              title: currentLang === 'he' ? 'כספת מוצפנת' : 'Encrypted vault',
-              text: currentLang === 'he'
-                ? 'הקובץ המוצפן שלך'
-                : 'Your encrypted file'
-            });
-
-            updateStatus(t.statusEncrypted);
+            await navigator.share({ files: [file], title: 'כספת מוצפנת', text: 'קובץ מוצפן ממערכת הכספת' });
+            showToast(t.statusEncrypted, 'success');
             clearAll();
             return;
           } catch (shareErr) {
             if (shareErr.name === 'AbortError') return;
-            console.warn('Share failed, falling back to download:', shareErr);
           }
         }
 
-        // גיבוי להורדה רגילה אם שיתוף קבצים לא נתמך
         const blobUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = blobUrl;
         link.download = suggestedName;
         document.body.appendChild(link);
         link.click();
+        setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(blobUrl); }, 1000);
 
-        setTimeout(() => {
-          document.body.removeChild(link);
-          URL.revokeObjectURL(blobUrl);
-        }, 1000);
-
-        updateStatus(t.statusEncrypted);
+        showToast(t.statusEncrypted, 'success');
         clearAll();
-
       } catch (err) {
-        console.error("Encryption Details Error:", err);
-        alert(currentLang === 'he' ? 'שגיאה בתהליך ההצפנה' : 'Encryption error');
+        showToast(currentLang === 'he' ? 'שגיאה בתהליך ההצפנה' : 'Encryption error', 'error');
       }
     }
 
@@ -1221,7 +1242,6 @@
       const modalCard = document.getElementById('modalCard');
       
       if (!file) return;
-
       if (!decryptPassword) {
         modalError.innerText = currentLang === 'he' ? 'אנא הכנס סיסמה' : 'Please enter password';
         return;
@@ -1231,51 +1251,37 @@
       reader.onload = async function(e) {
         try {
           const parsed = JSON.parse(e.target.result);
-          const iterations = parsed.rounds || 50000;
-
-          const decryptedBytes = await decryptData(parsed.payload, decryptPassword, iterations);
-
+          const decryptedBytes = await decryptData(parsed.payload, decryptPassword, parsed.rounds || 50000);
           closeDecryptModal();
 
           if (parsed.type === 'file') {
             const suggestedName = parsed.fileName || 'decrypted_file';
             const blob = new Blob([decryptedBytes]);
+            const decryptedFile = new File([blob], suggestedName, { type: 'application/octet-stream' });
 
-            if ('showSaveFilePicker' in window) {
+            if (navigator.canShare && navigator.canShare({ files: [decryptedFile] })) {
               try {
-                const handle = await window.showSaveFilePicker({
-                  suggestedName: suggestedName
-                });
-                const writable = await handle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                updateStatus(t.statusDecryptedFile(suggestedName));
+                await navigator.share({ files: [decryptedFile], title: 'קובץ מפוענח', text: 'קובץ שפוענח מהכספת' });
+                showToast(t.statusDecryptedFile(suggestedName), 'success');
                 return;
-              } catch (pickerErr) {
-                if (pickerErr.name === 'AbortError') return;
+              } catch (shareErr) {
+                if (shareErr.name === 'AbortError') return;
               }
             }
 
             const blobUrl = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = blobUrl;
-            link.download = suggestedName;
-            document.body.appendChild(link);
-            link.click();
-            setTimeout(() => {
-              document.body.removeChild(link);
-              URL.revokeObjectURL(blobUrl);
-            }, 1000);
-
-            updateStatus(t.statusDecryptedFile(suggestedName));
+            const linkElem = document.createElement('a');
+            linkElem.href = blobUrl;
+            linkElem.download = suggestedName;
+            document.body.appendChild(linkElem);
+            linkElem.click();
+            setTimeout(() => { document.body.removeChild(linkElem); URL.revokeObjectURL(blobUrl); }, 1000);
+            showToast(t.statusDecryptedFile(suggestedName), 'success');
           } else {
-            const textContent = new TextDecoder().decode(decryptedBytes);
-            document.getElementById('textInput').value = textContent;
-            if (parsed.rounds) {
-              document.getElementById('roundsSelect').value = parsed.rounds;
-            }
+            document.getElementById('textInput').value = new TextDecoder().decode(decryptedBytes);
+            if (parsed.rounds) document.getElementById('roundsSelect').value = parsed.rounds;
             updateTextStats();
-            updateStatus(t.statusDecryptedText);
+            showToast(t.statusDecryptedText, 'success');
           }
         } catch (err) {
           modalError.innerText = t.statusWrongPwd;
@@ -1285,23 +1291,6 @@
       };
       reader.readAsText(file);
     }
-
-    // Drag and drop setup for decryption zone
-    const dropZone = document.getElementById('dropZone');
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropZone.style.borderColor = '#2563eb';
-    });
-    dropZone.addEventListener('dragleave', () => {
-      dropZone.style.borderColor = '#bfdbfe';
-    });
-    dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropZone.style.borderColor = '#bfdbfe';
-      if (e.dataTransfer.files.length > 0) {
-        prepareFileForDecrypt(e.dataTransfer.files[0]);
-      }
-    });
   </script>
 </body>
 </html>
